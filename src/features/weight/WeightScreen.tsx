@@ -59,24 +59,33 @@ export default function WeightScreen({ profile }: { profile: Profile }) {
     const value = Math.round(kg * 10) / 10;
     saveWeight(date, value);
     setKgText(null);
-    showToast(`Pesée enregistrée : ${fmtKg(value)} kg.`);
+    showToast(`Pesée enregistrée : ${fmtKg(value)} kg`);
     const isLatest = !last || date >= last.date;
     if (isLatest && Math.abs(value - profile.weightKg) >= 0.1) setPrompt(value);
   };
 
+  const trendGood =
+    trend != null &&
+    (profile.goal === 'lose' ? trend <= 0 : profile.goal === 'gain' ? trend >= 0 : Math.abs(trend) < 0.2);
+
   return (
     <>
-      <header class="topbar">
-        <h1 class="topbar__title">Poids</h1>
+      <header class="page-header">
+        <h1 class="page-title">Poids</h1>
       </header>
-      <main class="screen" id="main">
-        <form class="card stack" onSubmit={save} aria-labelledby="w-new">
+      <main class="page" id="main">
+        <form class="card" onSubmit={save} aria-labelledby="w-new">
           <h2 class="card__title" id="w-new">
             Nouvelle pesée
           </h2>
           <div class="stepper">
-            <button type="button" class="icon-btn stepper__btn" onClick={() => step(-0.1)} aria-label="Moins 0,1 kg">
-              <Icon name="minus" />
+            <button
+              type="button"
+              class="icon-btn icon-btn--filled stepper__btn"
+              onClick={() => step(-0.1)}
+              aria-label="Moins 0,1 kg"
+            >
+              <Icon name="minus" stroke={2.4} />
             </button>
             <div class="stepper__field">
               <label for="w-kg" class="sr-only">
@@ -98,8 +107,13 @@ export default function WeightScreen({ profile }: { profile: Profile }) {
                 kg
               </span>
             </div>
-            <button type="button" class="icon-btn stepper__btn" onClick={() => step(0.1)} aria-label="Plus 0,1 kg">
-              <Icon name="plus" />
+            <button
+              type="button"
+              class="icon-btn icon-btn--filled stepper__btn"
+              onClick={() => step(0.1)}
+              aria-label="Plus 0,1 kg"
+            >
+              <Icon name="plus" stroke={2.4} />
             </button>
           </div>
           <p id="w-kg-err" class="field__error" hidden={valid(kg)}>
@@ -115,46 +129,59 @@ export default function WeightScreen({ profile }: { profile: Profile }) {
 
         {weights && list.length === 0 && (
           <div class="card empty">
-            <p>Aucune pesée pour l'instant.</p>
-            <p class="muted">Pèse-toi idéalement le matin, dans les mêmes conditions. La courbe et la tendance apparaîtront ici.</p>
+            <span class="empty__icon" aria-hidden="true">
+              <Icon name="weight" size={22} />
+            </span>
+            <p class="empty__title">Aucune pesée pour l'instant</p>
+            <p class="empty__text">
+              Pèse-toi le matin, dans les mêmes conditions. La courbe et la tendance apparaîtront ici.
+            </p>
           </div>
         )}
 
         {list.length > 0 && (
           <>
             <section class="card" aria-labelledby="w-trend">
-              <h2 class="card__title" id="w-trend">
-                Tendance
-              </h2>
-              <dl class="kv">
-                <div>
-                  <dt>Par semaine</dt>
-                  <dd>{trend == null ? 'En attente' : `${fmtSigned(trend)} kg`}</dd>
+              <div class="card__head">
+                <h2 class="card__title" id="w-trend">
+                  Tendance
+                </h2>
+                {trend != null && (
+                  <span class={`pill ${trendGood ? 'pill--accent' : ''}`}>
+                    <Icon name={trend <= 0 ? 'trendDown' : 'trendUp'} size={16} stroke={2.2} />
+                    {fmtSigned(trend)} kg / sem.
+                  </span>
+                )}
+              </div>
+              <div class="tiles">
+                <div class="tile">
+                  <span class="tile__label">Actuel</span>
+                  <span class="tile__value">
+                    {fmtKg(last!.kg)} <small>kg</small>
+                  </span>
                 </div>
-                {lastMa && (
-                  <div>
-                    <dt>Moyenne 7 jours</dt>
-                    <dd>{fmtKg(lastMa.kg)} kg</dd>
-                  </div>
-                )}
-                {list.length > 1 && (
-                  <div>
-                    <dt>Depuis le début</dt>
-                    <dd>{fmtSigned(last!.kg - list[0]!.kg)} kg</dd>
-                  </div>
-                )}
-              </dl>
+                <div class="tile">
+                  <span class="tile__label">Moy. 7 jours</span>
+                  <span class="tile__value">
+                    {lastMa ? fmtKg(lastMa.kg) : fmtKg(last!.kg)} <small>kg</small>
+                  </span>
+                </div>
+                <div class="tile">
+                  <span class="tile__label">Depuis le début</span>
+                  <span class="tile__value">
+                    {fmtSigned(last!.kg - list[0]!.kg)} <small>kg</small>
+                  </span>
+                </div>
+              </div>
               {trend == null && (
-                <p class="muted small">La tendance demande au moins 3 pesées réparties sur une semaine.</p>
+                <p class="footnote">La tendance s'affiche après 3 pesées réparties sur au moins une semaine.</p>
               )}
             </section>
 
             <section class="card" aria-labelledby="w-chart">
-              <div class="card__head">
-                <h2 class="card__title" id="w-chart">
-                  Courbe
-                </h2>
-              </div>
+              <h2 class="card__title" id="w-chart">
+                Évolution
+              </h2>
               <Segmented
                 legend="Période"
                 hideLegend
@@ -169,15 +196,24 @@ export default function WeightScreen({ profile }: { profile: Profile }) {
               />
               <WeightChart points={chartPoints.points} ma={chartPoints.ma} />
               <p class="legend">
-                <span class="legend__dot" aria-hidden="true" /> Pesées
-                <span class="legend__line" aria-hidden="true" /> Moyenne 7 jours
+                <span class="legend__item">
+                  <span class="legend__dot" aria-hidden="true" /> Pesées
+                </span>
+                <span class="legend__item">
+                  <span class="legend__line" aria-hidden="true" /> Moyenne 7 jours
+                </span>
               </p>
             </section>
 
-            <section class="card" aria-labelledby="w-hist">
-              <h2 class="card__title" id="w-hist">
-                Historique
-              </h2>
+            <section class="card" aria-labelledby="w-hist" style={{ paddingBottom: '0.25rem', gap: '0.5rem' }}>
+              <div class="card__head">
+                <h2 class="card__title" id="w-hist">
+                  Historique
+                </h2>
+                <span class="card__sub">
+                  {list.length} pesée{list.length > 1 ? 's' : ''}
+                </span>
+              </div>
               <ul class="list list--cv">
                 {[...list].reverse().map((w, i, arr) => {
                   const prev = arr[i + 1];
@@ -186,9 +222,12 @@ export default function WeightScreen({ profile }: { profile: Profile }) {
                       <button type="button" class="row" onClick={() => setEditing(w)}>
                         <span class="row__main">
                           <span class="row__title">{relativeDayLabel(w.date, today)}</span>
+                          {prev && <span class="row__sub">{fmtSigned(w.kg - prev.kg)} kg</span>}
                         </span>
-                        {prev && <span class="row__sub delta">{fmtSigned(w.kg - prev.kg)}</span>}
-                        <span class="row__kcal">{fmtKg(w.kg)} kg</span>
+                        <span class="row__value">{fmtKg(w.kg)} kg</span>
+                        <span class="row__chev" aria-hidden="true">
+                          <Icon name="chevron" size={18} />
+                        </span>
                       </button>
                     </li>
                   );
@@ -215,25 +254,35 @@ function UpdatePrompt({ profile, kg, onDone }: { profile: Profile; kg: number; o
       {profile.override ? (
         <p class="muted">Tes objectifs sont réglés à la main. Seul le poids du profil passera à {fmtKg(kg)} kg.</p>
       ) : (
-        <p class="muted">
-          Avec {fmtKg(kg)} kg : {fmtInt(next.kcal)} kcal et {fmtInt(next.protein)} g de protéines par jour
-          (actuellement {fmtInt(now.kcal)} kcal et {fmtInt(now.protein)} g).
-        </p>
+        <div class="tiles" style={{ gridTemplateColumns: 'repeat(2, minmax(0, 1fr))' }}>
+          <div class="tile">
+            <span class="tile__label">Calories</span>
+            <span class="tile__value">{fmtInt(next.kcal)}</span>
+            <span class="tile__hint">au lieu de {fmtInt(now.kcal)} kcal</span>
+          </div>
+          <div class="tile">
+            <span class="tile__label">Protéines</span>
+            <span class="tile__value">
+              {fmtInt(next.protein)} <small>g</small>
+            </span>
+            <span class="tile__hint">au lieu de {fmtInt(now.protein)} g</span>
+          </div>
+        </div>
       )}
-      <div class="row-actions">
+      <div class="btn-row">
+        <button type="button" class="btn btn--secondary btn--sm" onClick={onDone}>
+          Plus tard
+        </button>
         <button
           type="button"
-          class="btn btn--primary"
+          class="btn btn--primary btn--sm"
           onClick={() => {
             saveProfile({ ...profile, weightKg: kg });
-            showToast('Objectifs mis à jour.');
+            showToast('Objectifs mis à jour');
             onDone();
           }}
         >
           Mettre à jour
-        </button>
-        <button type="button" class="btn btn--ghost" onClick={onDone}>
-          Plus tard
         </button>
       </div>
     </section>
@@ -244,9 +293,9 @@ function EditWeight({ entry, onClose }: { entry: WeightEntry; onClose: () => voi
   const [text, setText] = useState(toInputString(entry.kg));
   const kg = parseDecimal(text);
   return (
-    <Sheet title={`Pesée : ${longDayLabel(entry.date)}`} onClose={onClose}>
+    <Sheet title="Modifier la pesée" subtitle={longDayLabel(entry.date)} onClose={onClose}>
       <form
-        class="stack"
+        class="sheet__content"
         onSubmit={(e) => {
           e.preventDefault();
           if (!valid(kg)) return;
@@ -262,20 +311,22 @@ function EditWeight({ entry, onClose }: { entry: WeightEntry; onClose: () => voi
           decimal
           error={!valid(kg) ? 'Poids entre 30 et 300 kg.' : null}
         />
-        <button type="submit" class="btn btn--primary btn--block" disabled={!valid(kg)}>
-          Enregistrer
-        </button>
-        <button
-          type="button"
-          class="btn btn--danger-ghost btn--block"
-          onClick={() => {
-            removeWeight(entry);
-            onClose();
-          }}
-        >
-          <Icon name="trash" size={20} />
-          Supprimer cette pesée
-        </button>
+        <div class="stack stack--tight">
+          <button type="submit" class="btn btn--primary btn--block" disabled={!valid(kg)}>
+            Enregistrer
+          </button>
+          <button
+            type="button"
+            class="btn btn--danger-soft btn--block"
+            onClick={() => {
+              removeWeight(entry);
+              onClose();
+            }}
+          >
+            <Icon name="trash" size={20} />
+            Supprimer cette pesée
+          </button>
+        </div>
       </form>
     </Sheet>
   );

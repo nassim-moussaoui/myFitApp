@@ -3,22 +3,24 @@ import type { Food } from '../../lib/db/schema';
 import { fmtDec, fmtInt } from '../../lib/format';
 import { Icon } from '../../ui/Icon';
 
-/** 40x40 thumbnail with reserved space (no layout shift), hidden when the image fails. */
+/** 44 px thumbnail with reserved space (no layout shift); a leaf icon when there is no image. */
 export function Thumb({ url }: { url?: string }) {
   const [failed, setFailed] = useState(false);
   return (
     <span class="thumb">
-      {url && !failed && (
+      {url && !failed ? (
         <img
           src={url}
           alt=""
-          width={40}
-          height={40}
+          width={44}
+          height={44}
           loading="lazy"
           decoding="async"
           referrerpolicy="no-referrer"
           onError={() => setFailed(true)}
         />
+      ) : (
+        <Icon name="leaf" size={20} />
       )}
     </span>
   );
@@ -59,7 +61,7 @@ export function FoodRow({
           setTimeout(() => setDone(false), 1200);
         }}
       >
-        <Icon name={done ? 'check' : 'plus'} />
+        <Icon name={done ? 'check' : 'plus'} size={20} stroke={2.6} />
       </button>
     </li>
   );

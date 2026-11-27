@@ -7,6 +7,7 @@ import { kcalFromMacros } from '../../lib/nutrition/targets';
 import type { Nutrients } from '../../lib/nutrition/types';
 import type { CoreNutrient } from '../../lib/off/api';
 import { Field } from '../../ui/controls';
+import { Icon } from '../../ui/Icon';
 import { Sheet } from '../../ui/Sheet';
 
 interface Props {
@@ -65,17 +66,22 @@ export function FoodEditor({ initial, missing = [], note, onSave, onClose }: Pro
   if (!name.trim()) errors.name = 'Donne un nom à cet aliment.';
   for (const k of ['protein', 'carbs', 'fat'] as const) {
     const v = num(k);
-    if (v == null || v < 0 || v > 100) errors[k] = 'Valeur entre 0 et 100 g.';
+    if (v == null || v < 0 || v > 100) errors[k] = 'Entre 0 et 100 g.';
   }
-  if (kcal == null || kcal < 0 || kcal > 950) errors.kcal = 'Valeur entre 0 et 950 kcal.';
+  if (kcal == null || kcal < 0 || kcal > 950) errors.kcal = 'Entre 0 et 950 kcal.';
   for (const k of ['sugars', 'fiber', 'salt'] as const) {
-    if (vals[k] !== '' && (num(k) == null || num(k)! < 0 || num(k)! > 100)) errors[k] = 'Valeur entre 0 et 100 g.';
+    if (vals[k] !== '' && (num(k) == null || num(k)! < 0 || num(k)! > 100)) errors[k] = 'Entre 0 et 100 g.';
   }
   const servingNum = parseDecimal(serving);
   if (serving !== '' && (servingNum == null || servingNum <= 0 || servingNum > 2000)) {
-    errors.serving = 'Portion entre 1 et 2000 g.';
+    errors.serving = 'Entre 1 et 2000 g.';
   }
-  const per100: Partial<Nutrients> = { kcal: kcal ?? undefined, protein: p ?? undefined, carbs: c ?? undefined, fat: f ?? undefined };
+  const per100: Partial<Nutrients> = {
+    kcal: kcal ?? undefined,
+    protein: p ?? undefined,
+    carbs: c ?? undefined,
+    fat: f ?? undefined,
+  };
   if (!errors.kcal && !errors.protein && !errors.carbs && !errors.fat && !isPlausiblePer100(per100)) {
     errors.global = 'Protéines, glucides et lipides dépassent 100 g pour 100 g.';
   }
@@ -83,11 +89,12 @@ export function FoodEditor({ initial, missing = [], note, onSave, onClose }: Pro
 
   const set = (k: Key) => (v: string) => setVals((s) => ({ ...s, [k]: v }));
   const err = (k: keyof typeof errors) => (showErrors ? errors[k] : null);
+  const isOwn = initial?.source === 'custom' && !!initial.id;
 
   return (
-    <Sheet title={initial?.source === 'custom' && initial.id ? "Modifier l'aliment" : 'Nouvel aliment'} onClose={onClose}>
+    <Sheet title={isOwn ? "Modifier l'aliment" : 'Nouvel aliment'} onClose={onClose}>
       <form
-        class="stack"
+        class="sheet__content"
         noValidate
         onSubmit={(e) => {
           e.preventDefault();
@@ -100,7 +107,6 @@ export function FoodEditor({ initial, missing = [], note, onSave, onClose }: Pro
           const now = Date.now();
           const n: Nutrients = { kcal: Math.round(kcal!), protein: p!, carbs: c!, fat: f! };
           for (const k of ['sugars', 'fiber', 'salt'] as const) if (vals[k] !== '') n[k] = num(k)!;
-          const isOwn = initial?.source === 'custom' && !!initial.id;
           const food: Food = {
             id: isOwn ? initial!.id! : `c:${newId()}`,
             source: 'custom',
@@ -120,44 +126,58 @@ export function FoodEditor({ initial, missing = [], note, onSave, onClose }: Pro
           onSave(food);
         }}
       >
-        {note && <p class="notice">{note}</p>}
-        <Field label="Nom" value={name} onValue={setName} autoComplete="off" error={err('name')} />
-        <Field label="Marque (facultatif)" value={brand} onValue={setBrand} autoComplete="off" />
-        {initial?.code && <p class="muted small">Code-barres : {initial.code}</p>}
-
-        <p class="field__label">Valeurs pour 100 g</p>
-        <div class="grid-2">
-          <Field
-            label={LABELS.kcal}
-            value={vals.kcal}
-            onValue={set('kcal')}
-            suffix="kcal"
-            decimal
-            placeholder={implied != null ? String(implied) : undefined}
-            hint={vals.kcal === '' && implied != null ? `Calculé : ${fmtInt(implied)} kcal` : undefined}
-            error={err('kcal')}
-          />
-          <Field label={LABELS.protein} value={vals.protein} onValue={set('protein')} suffix="g" decimal error={err('protein')} />
-          <Field label={LABELS.carbs} value={vals.carbs} onValue={set('carbs')} suffix="g" decimal error={err('carbs')} />
-          <Field label={LABELS.fat} value={vals.fat} onValue={set('fat')} suffix="g" decimal error={err('fat')} />
-        </div>
-        {showErrors && errors.global && (
-          <p class="field__error" role="alert">
-            {errors.global}
+        {note && (
+          <p class="notice notice--accent">
+            <span>{note}</span>
           </p>
         )}
 
-        <button type="button" class="link-btn" aria-expanded={moreOpen} onClick={() => setMoreOpen(!moreOpen)}>
-          {moreOpen ? 'Masquer les détails' : 'Sucres, fibres, sel, portion'}
-        </button>
-        {moreOpen && (
+        <div class="stack">
+          <Field label="Nom" value={name} onValue={setName} autoComplete="off" error={err('name')} />
+          <Field label="Marque (facultatif)" value={brand} onValue={setBrand} autoComplete="off" />
+          {initial?.code && <p class="footnote">Code-barres : {initial.code}</p>}
+        </div>
+
+        <fieldset class="stack">
+          <legend class="group-title" style={{ marginBottom: '0.75rem' }}>
+            Valeurs pour 100 g
+          </legend>
           <div class="grid-2">
-            <Field label={LABELS.sugars} value={vals.sugars} onValue={set('sugars')} suffix="g" decimal error={err('sugars')} />
-            <Field label={LABELS.fiber} value={vals.fiber} onValue={set('fiber')} suffix="g" decimal error={err('fiber')} />
-            <Field label={LABELS.salt} value={vals.salt} onValue={set('salt')} suffix="g" decimal error={err('salt')} />
-            <Field label="Portion" value={serving} onValue={setServing} suffix="g" decimal error={err('serving')} />
+            <Field
+              label={LABELS.kcal}
+              value={vals.kcal}
+              onValue={set('kcal')}
+              suffix="kcal"
+              decimal
+              placeholder={implied != null ? String(implied) : undefined}
+              hint={vals.kcal === '' && implied != null ? `Calculé : ${fmtInt(implied)} kcal` : undefined}
+              error={err('kcal')}
+            />
+            <Field label={LABELS.protein} value={vals.protein} onValue={set('protein')} suffix="g" decimal error={err('protein')} />
+            <Field label={LABELS.carbs} value={vals.carbs} onValue={set('carbs')} suffix="g" decimal error={err('carbs')} />
+            <Field label={LABELS.fat} value={vals.fat} onValue={set('fat')} suffix="g" decimal error={err('fat')} />
           </div>
-        )}
+          {showErrors && errors.global && (
+            <p class="field__error" role="alert">
+              {errors.global}
+            </p>
+          )}
+        </fieldset>
+
+        <div class="stack stack--tight">
+          <button type="button" class="link-btn" aria-expanded={moreOpen} onClick={() => setMoreOpen(!moreOpen)}>
+            <Icon name={moreOpen ? 'minus' : 'plus'} size={18} stroke={2.4} />
+            {moreOpen ? 'Masquer les détails' : 'Sucres, fibres, sel et portion'}
+          </button>
+          {moreOpen && (
+            <div class="grid-2">
+              <Field label={LABELS.sugars} value={vals.sugars} onValue={set('sugars')} suffix="g" decimal error={err('sugars')} />
+              <Field label={LABELS.fiber} value={vals.fiber} onValue={set('fiber')} suffix="g" decimal error={err('fiber')} />
+              <Field label={LABELS.salt} value={vals.salt} onValue={set('salt')} suffix="g" decimal error={err('salt')} />
+              <Field label="Portion" value={serving} onValue={setServing} suffix="g" decimal error={err('serving')} />
+            </div>
+          )}
+        </div>
 
         <button type="submit" class="btn btn--primary btn--block">
           Enregistrer

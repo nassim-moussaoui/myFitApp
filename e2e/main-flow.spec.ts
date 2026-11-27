@@ -104,7 +104,7 @@ test.describe('parcours principal', () => {
     // Stats reflect today.
     await page.getByRole('link', { name: 'Stats' }).click();
     await expect(page.getByText('Moyenne par jour suivi')).toBeVisible();
-    await expect(page.locator('.kv')).toContainText('1 / 7');
+    await expect(page.locator('.regularity')).toContainText('1 / 7');
 
     // Data survives a reload (IndexedDB).
     await page.reload();

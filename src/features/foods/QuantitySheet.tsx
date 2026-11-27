@@ -32,20 +32,21 @@ export function QuantitySheet(p: Props) {
   const n = useMemo(() => scaleNutrients(p.food.per100, valid ? grams : 0), [p.food, grams, valid]);
   const per = p.food.per100;
 
-  const chips = [...QUICK.map((g) => ({ g, label: `${g} g` }))];
+  const chips = QUICK.map((g) => ({ g, label: `${g} g` }));
   if (p.food.servingGrams) {
-    chips.push({ g: p.food.servingGrams, label: `1 portion (${fmtDec(p.food.servingGrams)} g)` });
+    chips.push({ g: p.food.servingGrams, label: `1 portion · ${fmtDec(p.food.servingGrams)} g` });
   }
 
   return (
     <Sheet
       title={p.food.name}
+      subtitle={p.food.brand}
       onClose={p.onClose}
       headerExtra={
         p.onToggleFavorite && (
           <button
             type="button"
-            class={`icon-btn ${fav ? 'icon-btn--fav' : ''}`}
+            class={`icon-btn icon-btn--filled ${fav ? 'icon-btn--fav' : ''}`}
             aria-pressed={fav}
             aria-label="Favori"
             onClick={() => {
@@ -53,71 +54,91 @@ export function QuantitySheet(p: Props) {
               p.onToggleFavorite?.(!fav);
             }}
           >
-            <Icon name="star" filled={fav} />
+            <Icon name="star" size={20} filled={fav} />
           </button>
         )
       }
     >
       <form
-        class="stack"
+        class="sheet__content"
         onSubmit={(e) => {
           e.preventDefault();
           if (valid) p.onConfirm(Math.round(grams * 10) / 10, meal);
         }}
       >
-        <div class="food-head">
+        <div class="food-hero">
           <Thumb url={p.food.imageUrl} />
-          <div>
-            {p.food.brand && <p class="food-head__brand">{p.food.brand}</p>}
-            <p class="food-head__per">
-              Pour 100 g : {fmtInt(per.kcal)} kcal · P {fmtDec(per.protein)} · G {fmtDec(per.carbs)} · L{' '}
-              {fmtDec(per.fat)}
-            </p>
+          <p class="food-hero__per">
+            Pour 100 g : {fmtInt(per.kcal)} kcal · P {fmtDec(per.protein)} · G {fmtDec(per.carbs)} · L{' '}
+            {fmtDec(per.fat)}
+          </p>
+        </div>
+
+        <div class="stack stack--tight">
+          <Field
+            label="Quantité"
+            value={gramsText}
+            onValue={setGramsText}
+            suffix="g"
+            decimal
+            error={gramsText !== '' && !valid ? 'Entre 1 et 5000 g.' : null}
+          />
+          <div class="chips" role="group" aria-label="Quantités rapides">
+            {chips.map((c) => (
+              <button
+                type="button"
+                key={c.label}
+                class="chip"
+                aria-pressed={grams === c.g}
+                onClick={() => setGramsText(toInputString(c.g))}
+              >
+                {c.label}
+              </button>
+            ))}
           </div>
         </div>
 
-        <Field
-          label="Quantité"
-          value={gramsText}
-          onValue={setGramsText}
-          suffix="g"
-          decimal
-          error={gramsText !== '' && !valid ? 'Quantité entre 1 et 5000 g.' : null}
-        />
-        <div class="chips" role="group" aria-label="Quantités rapides">
-          {chips.map((c) => (
-            <button
-              type="button"
-              key={c.label}
-              class="chip"
-              aria-pressed={grams === c.g}
-              onClick={() => setGramsText(toInputString(c.g))}
-            >
-              {c.label}
-            </button>
-          ))}
-        </div>
-
-        <div class="nutri-box" aria-live="polite" aria-atomic="true">
-          <div class="nutri-box__kcal">
-            <strong>{fmtInt(n.kcal)}</strong> kcal
+        <div class="stack stack--tight">
+          <div class="nutri-box" aria-live="polite" aria-atomic="true">
+            <div class="nutri nutri--kcal">
+              <span class="nutri__label">Calories</span>
+              <span class="nutri__val">
+                {fmtInt(n.kcal)} <small>kcal</small>
+              </span>
+            </div>
+            <div class="nutri">
+              <span class="nutri__label">
+                <span class="macro__dot bg-protein" aria-hidden="true" />
+                <span aria-hidden="true">Prot.</span>
+                <span class="sr-only">Protéines</span>
+              </span>
+              <span class="nutri__val">
+                {fmtDec(n.protein)} <small>g</small>
+              </span>
+            </div>
+            <div class="nutri">
+              <span class="nutri__label">
+                <span class="macro__dot bg-carbs" aria-hidden="true" />
+                <span aria-hidden="true">Gluc.</span>
+                <span class="sr-only">Glucides</span>
+              </span>
+              <span class="nutri__val">
+                {fmtDec(n.carbs)} <small>g</small>
+              </span>
+            </div>
+            <div class="nutri">
+              <span class="nutri__label">
+                <span class="macro__dot bg-fat" aria-hidden="true" />
+                <span aria-hidden="true">Lip.</span>
+                <span class="sr-only">Lipides</span>
+              </span>
+              <span class="nutri__val">
+                {fmtDec(n.fat)} <small>g</small>
+              </span>
+            </div>
           </div>
-          <dl class="nutri-box__macros">
-            <div>
-              <dt>Protéines</dt>
-              <dd>{fmtDec(n.protein)} g</dd>
-            </div>
-            <div>
-              <dt>Glucides</dt>
-              <dd>{fmtDec(n.carbs)} g</dd>
-            </div>
-            <div>
-              <dt>Lipides</dt>
-              <dd>{fmtDec(n.fat)} g</dd>
-            </div>
-          </dl>
           {(n.sugars != null || n.fiber != null || n.salt != null) && (
-            <p class="nutri-box__extra">
+            <p class="nutri-extra">
               {[
                 n.sugars != null && `Sucres ${fmtDec(n.sugars)} g`,
                 n.fiber != null && `Fibres ${fmtDec(n.fiber)} g`,
@@ -136,25 +157,27 @@ export function QuantitySheet(p: Props) {
           options={MEALS.map((m) => ({ value: m.id, label: m.short }))}
         />
 
-        <button type="submit" class="btn btn--primary btn--block" disabled={!valid}>
-          {p.mode === 'add' ? 'Ajouter' : 'Enregistrer'}
-        </button>
-        {(p.onDelete || p.onEditFood) && (
-          <div class="row-actions">
-            {p.onEditFood && (
-              <button type="button" class="btn btn--ghost" onClick={p.onEditFood}>
-                <Icon name="edit" size={20} />
-                Modifier l'aliment
-              </button>
-            )}
-            {p.onDelete && (
-              <button type="button" class="btn btn--danger-ghost" onClick={p.onDelete}>
-                <Icon name="trash" size={20} />
-                Supprimer
-              </button>
-            )}
-          </div>
-        )}
+        <div class="stack stack--tight">
+          <button type="submit" class="btn btn--primary btn--block" disabled={!valid}>
+            {p.mode === 'add' ? 'Ajouter' : 'Enregistrer'}
+          </button>
+          {(p.onDelete || p.onEditFood) && (
+            <div class="btn-row">
+              {p.onEditFood && (
+                <button type="button" class="btn btn--secondary btn--sm" onClick={p.onEditFood}>
+                  <Icon name="edit" size={18} />
+                  Modifier l'aliment
+                </button>
+              )}
+              {p.onDelete && (
+                <button type="button" class="btn btn--danger-soft btn--sm" onClick={p.onDelete}>
+                  <Icon name="trash" size={18} />
+                  Supprimer
+                </button>
+              )}
+            </div>
+          )}
+        </div>
       </form>
     </Sheet>
   );

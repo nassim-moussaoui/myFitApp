@@ -3,15 +3,14 @@ import { JournalScreen } from '../features/journal/JournalScreen';
 import { Onboarding } from '../features/settings/Onboarding';
 import { mealForHour } from '../lib/nutrition/types';
 import { Icon, type IconName } from '../ui/Icon';
-import { SkeletonRows } from '../ui/Progress';
 import { ToastHost, UpdateBanner } from '../ui/Toast';
 import { lazy, whenIdle } from './lazy';
 import { hrefFor, useTab, type Tab } from './router';
 import { store, useStore } from './store';
 
 const screenFallback = () => (
-  <main class="screen" id="main" aria-busy="true">
-    <SkeletonRows count={5} />
+  <main class="page" id="main" aria-busy="true">
+    <div class="skeleton skeleton--block" />
   </main>
 );
 
@@ -27,6 +26,15 @@ const TABS: { id: Tab; label: string; icon: IconName }[] = [
   { id: 'stats', label: 'Stats', icon: 'stats' },
   { id: 'reglages', label: 'Réglages', icon: 'settings' },
 ];
+
+function TabLink({ t, active }: { t: (typeof TABS)[number]; active: boolean }) {
+  return (
+    <a href={hrefFor(t.id)} class="tabbar__item" aria-current={active ? 'page' : undefined}>
+      <Icon name={t.icon} size={25} stroke={active ? 2.2 : 1.8} />
+      <span>{t.label}</span>
+    </a>
+  );
+}
 
 export function App() {
   const ready = useStore((s) => s.ready);
@@ -57,6 +65,8 @@ export function App() {
   }
 
   const close = () => store.set({ overlay: null });
+  const openAdd = () =>
+    store.set({ overlay: { kind: 'add', meal: mealForHour(new Date().getHours()), date: store.get().date } });
 
   return (
     <div class="app">
@@ -69,33 +79,14 @@ export function App() {
       {tab === 'stats' && <StatsScreen profile={profile} />}
       {tab === 'reglages' && <SettingsScreen profile={profile} />}
 
-      {tab === 'journal' && (
-        <button
-          type="button"
-          class="fab"
-          aria-label="Ajouter un aliment"
-          onClick={() =>
-            store.set({
-              overlay: { kind: 'add', meal: mealForHour(new Date().getHours()), date: store.get().date },
-            })
-          }
-        >
-          <Icon name="plus" size={28} />
-        </button>
-      )}
-
       <nav class="tabbar" aria-label="Navigation principale">
-        {TABS.map((t) => (
-          <a
-            key={t.id}
-            href={hrefFor(t.id)}
-            class="tabbar__item"
-            aria-current={tab === t.id ? 'page' : undefined}
-          >
-            <Icon name={t.icon} />
-            <span>{t.label}</span>
-          </a>
-        ))}
+        <TabLink t={TABS[0]!} active={tab === 'journal'} />
+        <TabLink t={TABS[1]!} active={tab === 'poids'} />
+        <button type="button" class="tabbar__add" aria-label="Ajouter un aliment" onClick={openAdd}>
+          <Icon name="plus" size={28} stroke={2.6} />
+        </button>
+        <TabLink t={TABS[2]!} active={tab === 'stats'} />
+        <TabLink t={TABS[3]!} active={tab === 'reglages'} />
       </nav>
 
       {overlay?.kind === 'add' && <AddFood meal={overlay.meal} date={overlay.date} onClose={close} />}

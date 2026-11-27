@@ -149,7 +149,7 @@ export default function Scanner({ onDetected, onClose }: { onDetected: (code: st
         torch.available && (
           <button
             type="button"
-            class="icon-btn"
+            class="icon-btn icon-btn--filled"
             aria-pressed={torch.on}
             aria-label="Lampe torche"
             onClick={() => void toggleTorch()}
@@ -159,18 +159,18 @@ export default function Scanner({ onDetected, onClose }: { onDetected: (code: st
         )
       }
     >
-      <div class={`scanner__view scanner__view--${state}`}>
-        <video ref={videoRef} class="scanner__video" playsInline muted autoPlay aria-hidden="true" />
-        <div class="scanner__frame" aria-hidden="true">
-          <span class="scanner__check">
-            <Icon name="check" size={48} />
-          </span>
+      <div class="sheet__content">
+        <div class={`scanner__view scanner__view--${state}`}>
+          <video ref={videoRef} class="scanner__video" playsInline muted autoPlay aria-hidden="true" />
+          <div class="scanner__frame" aria-hidden="true">
+            <span class="scanner__check">
+              <Icon name="check" size={40} stroke={3} />
+            </span>
+          </div>
         </div>
-      </div>
-      <p class="scanner__msg" role="status" aria-live="polite">
-        {message[state]}
-      </p>
-      <div class="scanner__manual">
+        <p class="scanner__msg" role="status" aria-live="polite">
+          {message[state]}
+        </p>
         {manual ? (
           <form
             class="stack"
@@ -201,7 +201,7 @@ export default function Scanner({ onDetected, onClose }: { onDetected: (code: st
             </button>
           </form>
         ) : (
-          <button type="button" class="btn btn--ghost btn--block" onClick={() => setManual(true)}>
+          <button type="button" class="btn btn--secondary btn--block" onClick={() => setManual(true)}>
             Saisir le code à la main
           </button>
         )}

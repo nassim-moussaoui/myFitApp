@@ -2,13 +2,14 @@ import { useEffect, useMemo, useState } from 'preact/hooks';
 import { useStore } from '../../app/store';
 import { entriesInRange } from '../../lib/db';
 import type { Entry } from '../../lib/db/schema';
-import { addDays, shortDayLabel, type ISODate } from '../../lib/date';
+import { addDays, shortDayLabel } from '../../lib/date';
 import { fmtInt } from '../../lib/format';
 import { dailyTotals, periodStats, type PeriodStats } from '../../lib/nutrition/stats';
 import { effectiveTargets } from '../../lib/nutrition/targets';
 import type { Profile } from '../../lib/nutrition/types';
 import { Segmented } from '../../ui/controls';
-import { MacroBar } from '../../ui/Progress';
+import { Icon } from '../../ui/Icon';
+import { Macros } from '../../ui/Progress';
 
 export default function StatsScreen({ profile }: { profile: Profile }) {
   const today = useStore((s) => s.today);
@@ -34,72 +35,76 @@ export default function StatsScreen({ profile }: { profile: Profile }) {
     return periodStats(dailyTotals(merged), today, period, targets.kcal, today);
   }, [stored, days, today, period, targets.kcal]);
 
+  const pct = stats && targets.kcal > 0 ? Math.round((stats.avg.kcal / targets.kcal) * 100) : 0;
+
   return (
     <>
-      <header class="topbar">
-        <h1 class="topbar__title">Stats</h1>
+      <header class="page-header">
+        <h1 class="page-title">Stats</h1>
       </header>
-      <main class="screen" id="main">
+      <main class="page" id="main">
         <Segmented
           legend="Période"
           hideLegend
           value={period}
           onChange={setPeriod}
           options={[
-            { value: 7, label: '7 jours' },
-            { value: 30, label: '30 jours' },
+            { value: 7, label: '7 derniers jours' },
+            { value: 30, label: '30 derniers jours' },
           ]}
         />
         {!stats ? (
-          <div class="card skeleton skeleton--block" aria-hidden="true" />
+          <div class="skeleton skeleton--block" aria-hidden="true" />
         ) : stats.daysLogged === 0 ? (
           <div class="card empty">
-            <p>Pas encore de données sur cette période.</p>
-            <p class="muted">Ajoute tes repas dans le Journal : moyennes et régularité s'afficheront ici.</p>
+            <span class="empty__icon" aria-hidden="true">
+              <Icon name="stats" size={22} />
+            </span>
+            <p class="empty__title">Pas encore de données</p>
+            <p class="empty__text">Note tes repas dans le Journal : moyennes et régularité s'afficheront ici.</p>
           </div>
         ) : (
           <>
             <section class="card" aria-labelledby="s-avg">
-              <h2 class="card__title" id="s-avg">
-                Moyenne par jour suivi
-              </h2>
-              <p class="big-num">
-                {fmtInt(stats.avg.kcal)} <span>kcal</span>
-              </p>
-              <p class="muted small">
-                {Math.round((stats.avg.kcal / targets.kcal) * 100)} % de ton objectif de {fmtInt(targets.kcal)} kcal
-              </p>
-              <div class="summary__macros">
-                <MacroBar label="Protéines" kind="protein" value={stats.avg.protein} target={targets.protein} />
-                <MacroBar label="Glucides" kind="carbs" value={stats.avg.carbs} target={targets.carbs} />
-                <MacroBar label="Lipides" kind="fat" value={stats.avg.fat} target={targets.fat} />
+              <div class="card__head">
+                <h2 class="card__title" id="s-avg">
+                  Moyenne par jour suivi
+                </h2>
+                <span class={`pill ${pct >= 90 && pct <= 110 ? 'pill--accent' : ''}`}>{pct} %</span>
               </div>
+              <p class="hero-num">
+                <span class="hero-num__value">{fmtInt(stats.avg.kcal)}</span>{' '}
+                <span class="hero-num__unit">kcal sur {fmtInt(targets.kcal)}</span>
+              </p>
+              <hr class="divider" />
+              <Macros value={stats.avg} target={targets} />
             </section>
 
             <section class="card" aria-labelledby="s-reg">
               <h2 class="card__title" id="s-reg">
                 Régularité
               </h2>
-              <dl class="kv">
-                <div>
-                  <dt>Jours suivis</dt>
-                  <dd>
-                    {stats.daysLogged} / {stats.days}
-                  </dd>
+              <div class="tiles regularity">
+                <div class="tile">
+                  <span class="tile__label">Jours suivis</span>
+                  <span class="tile__value">
+                    {stats.daysLogged} <small>/ {stats.days}</small>
+                  </span>
                 </div>
-                <div>
-                  <dt>Série en cours</dt>
-                  <dd>
-                    {stats.streak} jour{stats.streak > 1 ? 's' : ''}
-                  </dd>
+                <div class="tile">
+                  <span class="tile__label">Série</span>
+                  <span class="tile__value">
+                    {stats.streak} <small>j</small>
+                  </span>
                 </div>
-                <div>
-                  <dt>Dans l'objectif (±10 %)</dt>
-                  <dd>
-                    {stats.daysOnTarget} jour{stats.daysOnTarget > 1 ? 's' : ''}
-                  </dd>
+                <div class="tile">
+                  <span class="tile__label">Dans la cible</span>
+                  <span class="tile__value">
+                    {stats.daysOnTarget} <small>j</small>
+                  </span>
                 </div>
-              </dl>
+              </div>
+              <p class="footnote">« Dans la cible » : à plus ou moins 10 % de ton objectif calorique.</p>
             </section>
 
             <section class="card" aria-labelledby="s-chart">
@@ -108,8 +113,12 @@ export default function StatsScreen({ profile }: { profile: Profile }) {
               </h2>
               <KcalBars stats={stats} target={targets.kcal} />
               <p class="legend">
-                <span class="legend__bar" aria-hidden="true" /> Calories
-                <span class="legend__target" aria-hidden="true" /> Objectif
+                <span class="legend__item">
+                  <span class="legend__bar" aria-hidden="true" /> Calories
+                </span>
+                <span class="legend__item">
+                  <span class="legend__target" aria-hidden="true" /> Objectif
+                </span>
               </p>
             </section>
           </>
@@ -120,8 +129,8 @@ export default function StatsScreen({ profile }: { profile: Profile }) {
 }
 
 const W = 340;
-const H = 160;
-const PAD = { top: 10, right: 6, bottom: 22, left: 6 };
+const H = 170;
+const PAD = { top: 12, right: 4, bottom: 24, left: 4 };
 
 function KcalBars({ stats, target }: { stats: PeriodStats; target: number }) {
   const [hover, setHover] = useState<number | null>(null);
@@ -130,11 +139,10 @@ function KcalBars({ stats, target }: { stats: PeriodStats; target: number }) {
   const iw = W - PAD.left - PAD.right;
   const ih = H - PAD.top - PAD.bottom;
   const slot = iw / n;
-  const gap = 2;
+  const gap = n > 10 ? 2 : 6;
   const bw = Math.max(2, slot - gap);
   const y = (v: number) => PAD.top + (1 - v / max) * ih;
   const base = PAD.top + ih;
-  const label = (d: ISODate) => shortDayLabel(d);
   const h = hover != null ? stats.series[hover] : undefined;
 
   return (
@@ -161,14 +169,21 @@ function KcalBars({ stats, target }: { stats: PeriodStats; target: number }) {
           const d = `M${x0},${base}V${base - hgt + r}Q${x0},${base - hgt} ${x0 + r},${base - hgt}H${x0 + bw - r}Q${
             x0 + bw
           },${base - hgt} ${x0 + bw},${base - hgt + r}V${base}Z`;
-          return <path key={s.date} class={`chart__bar ${hover === i ? 'chart__bar--hover' : ''}`} d={d} />;
+          const over = target > 0 && s.kcal > target * 1.1;
+          return (
+            <path
+              key={s.date}
+              class={`chart__bar ${over ? 'chart__bar--over' : ''} ${hover === i ? 'chart__bar--hover' : ''}`}
+              d={d}
+            />
+          );
         })}
         <line class="chart__target" x1={PAD.left} x2={W - PAD.right} y1={y(target)} y2={y(target)} />
-        <text class="chart__axis" x={PAD.left} y={H - 5}>
-          {label(stats.series[0]!.date)}
+        <text class="chart__axis" x={PAD.left} y={H - 6}>
+          {shortDayLabel(stats.series[0]!.date)}
         </text>
-        <text class="chart__axis" x={W - PAD.right} y={H - 5} text-anchor="end">
-          {label(stats.series[n - 1]!.date)}
+        <text class="chart__axis" x={W - PAD.right} y={H - 6} text-anchor="end">
+          {shortDayLabel(stats.series[n - 1]!.date)}
         </text>
       </svg>
       {h && (
@@ -178,7 +193,7 @@ function KcalBars({ stats, target }: { stats: PeriodStats; target: number }) {
           aria-hidden="true"
         >
           <strong>{h.kcal == null ? 'Non suivi' : `${fmtInt(h.kcal)} kcal`}</strong>
-          <span>{label(h.date)}</span>
+          <span>{shortDayLabel(h.date)}</span>
         </div>
       )}
     </div>

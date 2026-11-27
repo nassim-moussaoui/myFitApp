@@ -201,141 +201,146 @@ export default function AddFood({ meal: initialMeal, date, onClose }: { meal: Me
   const showSearch = q.length >= 1;
   const remoteItems = remote.status === 'done' ? remote.items.filter((r) => !local.some((l) => l.id === r.id)) : [];
 
+  const quick = (x: Food) => log(x, defaultGrams(x), meal);
+  const foodList = (items: Food[], cv = true) => (
+    <ul class={`card card--flush list ${cv ? 'list--cv' : ''}`}>
+      {items.map((f) => (
+        <FoodRow key={f.id} food={f} onOpen={open} onQuickAdd={quick} />
+      ))}
+    </ul>
+  );
+
   return (
     <>
       <Sheet title="Ajouter un aliment" full onClose={onClose} class="addfood">
-        <Segmented
-          legend="Repas"
-          hideLegend
-          value={meal}
-          onChange={setMeal}
-          options={MEALS.map((m) => ({ value: m.id, label: m.short }))}
-        />
-        <form class="searchbar" role="search" onSubmit={(e) => e.preventDefault()}>
-          <label class="sr-only" for={searchId}>
-            Rechercher un aliment
-          </label>
-          <div class="searchbar__field">
-            <Icon name="search" size={20} />
-            <input
-              id={searchId}
-              class="input searchbar__input"
-              type="search"
-              placeholder="Rechercher un aliment"
-              value={query}
-              onInput={(e) => setQuery(e.currentTarget.value)}
-              enterKeyHint="search"
-              autoComplete="off"
-              autoCorrect="off"
-              spellcheck={false}
+        <div class="sheet__content">
+          <div class="stack stack--tight">
+            <Segmented
+              legend="Repas"
+              hideLegend
+              value={meal}
+              onChange={setMeal}
+              options={MEALS.map((m) => ({ value: m.id, label: m.short }))}
             />
-          </div>
-          <button
-            type="button"
-            class="icon-btn icon-btn--tint searchbar__scan"
-            aria-label="Scanner un code-barres"
-            onClick={() => setScanning(true)}
-          >
-            <Icon name="barcode" />
-          </button>
-        </form>
-
-        {!online && <p class="notice">Hors ligne : la recherche se limite à tes aliments enregistrés.</p>}
-
-        <button
-          type="button"
-          class="btn btn--ghost btn--block"
-          onClick={() => setEditor({ initial: { name: query.trim() }, thenAdd: true })}
-        >
-          <Icon name="plus" size={20} />
-          {query.trim() ? `Créer « ${query.trim()} »` : 'Créer un aliment'}
-        </button>
-
-        {!showSearch && foods && (
-          <>
-            {favorites.length > 0 && (
-              <section aria-labelledby="fav-h">
-                <h3 class="section-title" id="fav-h">
-                  Favoris
-                </h3>
-                <ul class="list list--cv">
-                  {favorites.map((f) => (
-                    <FoodRow key={f.id} food={f} onOpen={open} onQuickAdd={(x) => log(x, defaultGrams(x), meal)} />
-                  ))}
-                </ul>
-              </section>
-            )}
-            {recents.length > 0 && (
-              <section aria-labelledby="rec-h">
-                <h3 class="section-title" id="rec-h">
-                  Récents
-                </h3>
-                <ul class="list list--cv">
-                  {recents.map((f) => (
-                    <FoodRow key={f.id} food={f} onOpen={open} onQuickAdd={(x) => log(x, defaultGrams(x), meal)} />
-                  ))}
-                </ul>
-              </section>
-            )}
-            {favorites.length === 0 && recents.length === 0 && (
-              <div class="empty">
-                <p>Aucun aliment récent pour l'instant.</p>
-                <p class="muted">Cherche un produit, scanne un code-barres ou crée ton propre aliment. Il apparaîtra ici.</p>
+            <form class="searchbar" role="search" onSubmit={(e) => e.preventDefault()}>
+              <label class="sr-only" for={searchId}>
+                Rechercher un aliment
+              </label>
+              <div class="searchbar__field">
+                <Icon name="search" size={20} />
+                <input
+                  id={searchId}
+                  class="input searchbar__input"
+                  type="search"
+                  placeholder="Rechercher un aliment"
+                  value={query}
+                  onInput={(e) => setQuery(e.currentTarget.value)}
+                  enterKeyHint="search"
+                  autoComplete="off"
+                  autoCorrect="off"
+                  spellcheck={false}
+                />
               </div>
-            )}
-          </>
-        )}
+              <button type="button" class="scan-btn" aria-label="Scanner un code-barres" onClick={() => setScanning(true)}>
+                <Icon name="barcode" size={24} />
+              </button>
+            </form>
+          </div>
 
-        {showSearch && (
-          <>
-            {local.length > 0 && (
-              <section aria-labelledby="mine-h">
-                <h3 class="section-title" id="mine-h">
-                  Mes aliments
-                </h3>
-                <ul class="list">
-                  {local.map((f) => (
-                    <FoodRow key={f.id} food={f} onOpen={open} onQuickAdd={(x) => log(x, defaultGrams(x), meal)} />
-                  ))}
-                </ul>
-              </section>
-            )}
-            <section aria-labelledby="off-h" aria-busy={remote.status === 'loading'}>
-              <h3 class="section-title" id="off-h">
-                Open Food Facts
-              </h3>
-              {q.length < 2 && <p class="muted small">Tape au moins 2 lettres.</p>}
-              {remote.status === 'loading' && <SkeletonRows count={5} />}
-              {remote.status === 'error' && (
-                <div class="notice notice--error" role="alert">
-                  <p>{remote.message}</p>
-                  {!remote.autoRetry && (
-                    <button type="button" class="btn btn--small" onClick={() => setRetry((n) => n + 1)}>
-                      Réessayer
-                    </button>
-                  )}
+          {!online && (
+            <p class="notice">
+              <span>Hors ligne : la recherche se limite à tes aliments enregistrés.</span>
+            </p>
+          )}
+
+          {!showSearch && foods && (
+            <>
+              {favorites.length > 0 && (
+                <section class="group" aria-labelledby="fav-h">
+                  <h3 class="group-title" id="fav-h">
+                    Favoris
+                  </h3>
+                  {foodList(favorites)}
+                </section>
+              )}
+              {recents.length > 0 && (
+                <section class="group" aria-labelledby="rec-h">
+                  <h3 class="group-title" id="rec-h">
+                    Récents
+                  </h3>
+                  {foodList(recents)}
+                </section>
+              )}
+              {favorites.length === 0 && recents.length === 0 && (
+                <div class="card empty">
+                  <span class="empty__icon" aria-hidden="true">
+                    <Icon name="search" size={22} />
+                  </span>
+                  <p class="empty__title">Aucun aliment récent</p>
+                  <p class="empty__text">
+                    Cherche un produit, scanne un code-barres ou crée ton propre aliment. Il apparaîtra ici pour un
+                    ajout en un geste.
+                  </p>
                 </div>
               )}
-              {remote.status === 'done' && remote.items.length === 0 && (
-                <p class="muted small">Aucun résultat pour « {query.trim()} ».</p>
+            </>
+          )}
+
+          {showSearch && (
+            <>
+              {local.length > 0 && (
+                <section class="group" aria-labelledby="mine-h">
+                  <h3 class="group-title" id="mine-h">
+                    Mes aliments
+                  </h3>
+                  {foodList(local, false)}
+                </section>
               )}
-              {remoteItems.length > 0 && (
-                <ul class="list list--cv">
-                  {remoteItems.map((f) => (
-                    <FoodRow key={f.id} food={f} onOpen={open} onQuickAdd={(x) => log(x, defaultGrams(x), meal)} />
-                  ))}
-                </ul>
-              )}
-            </section>
-          </>
-        )}
-        <p class="attribution">
-          Données produits :{' '}
-          <a href="https://world.openfoodfacts.org" target="_blank" rel="noopener noreferrer">
-            Open Food Facts
-          </a>{' '}
-          (ODbL)
-        </p>
+              <section class="group" aria-labelledby="off-h" aria-busy={remote.status === 'loading'}>
+                <h3 class="group-title" id="off-h">
+                  Open Food Facts
+                </h3>
+                {q.length < 2 && <p class="footnote">Tape au moins 2 lettres.</p>}
+                {remote.status === 'loading' && (
+                  <div class="card card--flush">
+                    <SkeletonRows count={5} />
+                  </div>
+                )}
+                {remote.status === 'error' && (
+                  <div class="notice notice--error" role="alert">
+                    <span>{remote.message}</span>
+                    {!remote.autoRetry && (
+                      <button type="button" class="btn btn--sm btn--secondary" onClick={() => setRetry((n) => n + 1)}>
+                        Réessayer
+                      </button>
+                    )}
+                  </div>
+                )}
+                {remote.status === 'done' && remote.items.length === 0 && (
+                  <p class="footnote">Aucun résultat pour « {query.trim()} ».</p>
+                )}
+                {remoteItems.length > 0 && foodList(remoteItems)}
+              </section>
+            </>
+          )}
+
+          <button
+            type="button"
+            class="btn btn--secondary btn--block"
+            onClick={() => setEditor({ initial: { name: query.trim() }, thenAdd: true })}
+          >
+            <Icon name="plus" size={20} stroke={2.4} />
+            {query.trim() ? `Créer « ${query.trim()} »` : 'Créer un aliment'}
+          </button>
+
+          <p class="attribution">
+            Données produits :{' '}
+            <a href="https://world.openfoodfacts.org" target="_blank" rel="noopener noreferrer">
+              Open Food Facts
+            </a>{' '}
+            (ODbL)
+          </p>
+        </div>
         <ToastHost />
       </Sheet>
 
@@ -386,7 +391,14 @@ export default function AddFood({ meal: initialMeal, date, onClose }: { meal: Me
 
       {lookup && (
         <Sheet
-          title={lookup.status === 'loading' ? 'Recherche du produit' : lookup.status === 'notfound' ? 'Produit introuvable' : 'Recherche impossible'}
+          title={
+            lookup.status === 'loading'
+              ? 'Recherche du produit'
+              : lookup.status === 'notfound'
+                ? 'Produit introuvable'
+                : 'Recherche impossible'
+          }
+          subtitle={`Code ${lookup.code}`}
           onClose={() => {
             lookupCtrl.current?.abort();
             setLookup(null);
@@ -394,42 +406,43 @@ export default function AddFood({ meal: initialMeal, date, onClose }: { meal: Me
         >
           {lookup.status === 'loading' ? (
             <div aria-busy="true">
-              <p class="muted small">Code {lookup.code}</p>
               <SkeletonRows count={1} />
             </div>
           ) : (
-            <div class="stack">
-              <p>
+            <div class="sheet__content">
+              <p class="muted">
                 {lookup.status === 'notfound'
-                  ? `Le code ${lookup.code} n'existe pas sur Open Food Facts. Tu peux créer l'aliment, il sera reconnu au prochain scan.`
+                  ? "Ce code n'existe pas sur Open Food Facts. Crée l'aliment : il sera reconnu au prochain scan."
                   : lookup.message}
               </p>
-              <button
-                type="button"
-                class="btn btn--primary btn--block"
-                onClick={() => {
-                  const code = lookup.code;
-                  setLookup(null);
-                  setEditor({ initial: { code }, thenAdd: true });
-                }}
-              >
-                Créer cet aliment
-              </button>
-              {lookup.status === 'error' && (
-                <button type="button" class="btn btn--ghost btn--block" onClick={() => void handleCode(lookup.code)}>
-                  Réessayer
+              <div class="stack stack--tight">
+                <button
+                  type="button"
+                  class="btn btn--primary btn--block"
+                  onClick={() => {
+                    const code = lookup.code;
+                    setLookup(null);
+                    setEditor({ initial: { code }, thenAdd: true });
+                  }}
+                >
+                  Créer cet aliment
                 </button>
-              )}
-              <button
-                type="button"
-                class="btn btn--ghost btn--block"
-                onClick={() => {
-                  setLookup(null);
-                  setScanning(true);
-                }}
-              >
-                Scanner à nouveau
-              </button>
+                {lookup.status === 'error' && (
+                  <button type="button" class="btn btn--secondary btn--block" onClick={() => void handleCode(lookup.code)}>
+                    Réessayer
+                  </button>
+                )}
+                <button
+                  type="button"
+                  class="btn btn--plain btn--block"
+                  onClick={() => {
+                    setLookup(null);
+                    setScanning(true);
+                  }}
+                >
+                  Scanner à nouveau
+                </button>
+              </div>
             </div>
           )}
         </Sheet>

@@ -4,12 +4,11 @@ import { Icon } from './Icon';
 
 interface Props {
   title: string;
+  subtitle?: string;
   onClose: () => void;
   children: ComponentChildren;
   /** Full-screen panel instead of a bottom sheet. */
   full?: boolean;
-  /** Hide the visual title (still announced). */
-  hideTitle?: boolean;
   class?: string;
   headerExtra?: ComponentChildren;
 }
@@ -18,7 +17,7 @@ interface Props {
  * Modal built on <dialog>: focus trap, inert background, Escape to close.
  * Mount it to open, unmount it to close.
  */
-export function Sheet({ title, onClose, children, full, hideTitle, class: cls = '', headerExtra }: Props) {
+export function Sheet({ title, subtitle, onClose, children, full, class: cls = '', headerExtra }: Props) {
   const ref = useRef<HTMLDialogElement>(null);
   const titleId = useId();
   const closeRef = useRef(onClose);
@@ -51,14 +50,25 @@ export function Sheet({ title, onClose, children, full, hideTitle, class: cls = 
       }}
     >
       <div class="sheet__panel">
-        <header class={`sheet__header ${hideTitle ? 'sheet__header--bare' : ''}`}>
-          <h2 id={titleId} class={hideTitle ? 'sr-only' : 'sheet__title'}>
-            {title}
-          </h2>
-          {headerExtra}
-          <button type="button" class="icon-btn" onClick={() => closeRef.current()} aria-label="Fermer">
-            <Icon name="close" />
-          </button>
+        <span class="sheet__grabber" aria-hidden="true" />
+        <header class="sheet__header">
+          <div class="sheet__titles">
+            <h2 id={titleId} class="sheet__title">
+              {title}
+            </h2>
+            {subtitle && <p class="sheet__subtitle">{subtitle}</p>}
+          </div>
+          <div class="sheet__actions">
+            {headerExtra}
+            <button
+              type="button"
+              class="icon-btn icon-btn--filled"
+              onClick={() => closeRef.current()}
+              aria-label="Fermer"
+            >
+              <Icon name="close" size={18} stroke={2.4} />
+            </button>
+          </div>
         </header>
         <div class="sheet__body">{children}</div>
       </div>
