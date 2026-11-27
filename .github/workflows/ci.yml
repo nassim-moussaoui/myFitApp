@@ -18,12 +18,17 @@ jobs:
       - run: npm ci
       - run: npm run typecheck
       - run: npm test
-      - name: Navigateur WebKit (Safari)
-        run: npx playwright install --with-deps webkit
+      - name: Navigateurs WebKit (Safari) et Chromium
+        run: npx playwright install --with-deps webkit chromium
       - name: Parcours principal sur iPhone (WebKit)
         run: npx playwright test --trace off
         env:
           CI: 'true'
+      - name: Rechargement hors ligne réel (Chromium, profil iPhone)
+        run: npx playwright test --trace off -g "hors ligne"
+        env:
+          CI: 'true'
+          E2E_BROWSER: chromium
       - if: failure()
         uses: actions/upload-artifact@v4
         with:

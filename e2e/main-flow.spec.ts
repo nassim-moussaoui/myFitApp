@@ -131,17 +131,24 @@ test.describe('parcours principal', () => {
 });
 
 test('fonctionne hors ligne après la première visite', async ({ page, context, browserName }) => {
-  test.skip(browserName === 'webkit' && !!process.env.SKIP_OFFLINE, 'offline test disabled');
   await page.goto('./');
   await expect(page.getByRole('heading', { name: 'Bienvenue' })).toBeVisible();
-  // Wait for the service worker to precache the app shell and take control.
-  await page.evaluate(async () => {
-    const reg = await navigator.serviceWorker.ready;
-    return reg.active?.state;
-  });
+  await page.evaluate(() => navigator.serviceWorker.ready);
   await page.reload();
   await page.waitForFunction(() => !!navigator.serviceWorker.controller);
   await expect(page.getByRole('heading', { name: 'Bienvenue' })).toBeVisible();
+
+  // The app shell is precached by the service worker.
+  const cached = await page.evaluate(async () => {
+    const html = await caches.match(new URL('index.html', location.href).href, { ignoreSearch: true });
+    const scripts = [...document.querySelectorAll<HTMLScriptElement>('script[type=module]')].map((s) => s.src);
+    const js = await Promise.all(scripts.map((u) => caches.match(u, { ignoreSearch: true })));
+    return !!html && js.length > 0 && js.every(Boolean);
+  });
+  expect(cached).toBe(true);
+
+  // Playwright cannot emulate an offline navigation in WebKit; Chromium does the real reload.
+  if (browserName === 'webkit') return;
   await context.setOffline(true);
   await page.reload();
   await expect(page.getByRole('heading', { name: 'Bienvenue' })).toBeVisible();
