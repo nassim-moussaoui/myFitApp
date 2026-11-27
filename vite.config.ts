@@ -15,6 +15,7 @@ export default defineConfig({
     VitePWA({
       registerType: 'prompt',
       injectRegister: false,
+      includeManifestIcons: false,
       manifest: {
         id: base,
         name: 'MyFit, suivi nutrition',
@@ -36,7 +37,7 @@ export default defineConfig({
         ],
       },
       workbox: {
-        globPatterns: ['**/*.{js,css,html,svg,png,webmanifest,txt}'],
+        globPatterns: ['**/*.{js,css,html,svg,png,txt}'],
         navigateFallback: 'index.html',
         cleanupOutdatedCaches: true,
         // The barcode decoder is large; precache it anyway so scanning known products works offline.
