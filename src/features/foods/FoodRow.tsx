@@ -47,7 +47,11 @@ export function FoodRow({
           <span class="row__title">{food.name}</span>
           <span class="row__sub">
             {food.brand ? `${food.brand} · ` : ''}
-            {fmtInt(food.per100.kcal)} kcal / 100 g
+            {food.stub
+              ? food.per100.kcal > 0
+                ? `≈ ${fmtInt(food.per100.kcal)} kcal / 100 g`
+                : 'Valeurs au toucher'
+              : `${fmtInt(food.per100.kcal)} kcal / 100 g`}
           </span>
         </span>
       </button>

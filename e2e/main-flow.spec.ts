@@ -8,8 +8,23 @@ const SKYR = {
   nutriments: { 'energy-kcal_100g': 57, proteins_100g: 9.5, carbohydrates_100g: 3.6, fat_100g: 0.5 },
 };
 
+/** Search service hit: approximate values only (Nutri-Score data). */
+const SKYR_HIT = {
+  code: SKYR.code,
+  product_name: SKYR.product_name,
+  brands: ['xx:Yoplait'],
+  serving_quantity: 150,
+  nutriscore_data: {
+    components: {
+      negative: [{ id: 'energy', value: 241, unit: 'kJ' }],
+      positive: [{ id: 'proteins', value: 9.5, unit: 'g' }],
+    },
+  },
+};
+
 /** Open Food Facts is mocked: tests must not depend on the network or its rate limit. */
 async function mockOff(page: Page) {
+  await page.route('https://search.openfoodfacts.org/**', (route) => route.fulfill({ json: { hits: [SKYR_HIT] } }));
   await page.route('https://world.openfoodfacts.org/**', (route) => {
     const url = route.request().url();
     if (url.includes('/cgi/search.pl')) return route.fulfill({ json: { products: [SKYR] } });

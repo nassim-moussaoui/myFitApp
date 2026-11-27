@@ -1,10 +1,10 @@
 import { getCachedSearch, putCachedSearch } from '../db';
 import type { Food } from '../db/schema';
-import { OffError, searchProducts } from './api';
+import { OffError, fetchProduct, searchProducts, type MappedProduct } from './api';
 import { RateLimiter } from './rateLimit';
 
-/** Open Food Facts allows about 10 search requests per minute. */
-export const searchLimiter = new RateLimiter(10, 60_000);
+/** Keeps the search service comfortable: at most 20 searches per minute. */
+export const searchLimiter = new RateLimiter(20, 60_000);
 
 const memory = new Map<string, Food[]>();
 
@@ -18,7 +18,9 @@ export interface SearchResult {
 
 /** Memory cache, then IndexedDB cache, then network (rate limited). */
 export async function searchOff(q: string, signal?: AbortSignal): Promise<SearchResult> {
-  const key = normalizeQuery(q);
+  const query = normalizeQuery(q);
+  // Versioned key: results from the former search endpoint are not reused.
+  const key = `v2:${query}`;
   const mem = memory.get(key);
   if (mem) return { items: mem, fromCache: true };
   const cached = await getCachedSearch(key).catch(() => undefined);
@@ -31,7 +33,7 @@ export async function searchOff(q: string, signal?: AbortSignal): Promise<Search
   if (wait > 0) throw new OffError('rate', wait);
   searchLimiter.take();
   try {
-    const items = await searchProducts(key, signal);
+    const items = await searchProducts(query, signal);
     memory.set(key, items);
     void putCachedSearch({ q: key, ts: Date.now(), items }).catch(() => {});
     return { items, fromCache: false };
@@ -39,6 +41,38 @@ export async function searchOff(q: string, signal?: AbortSignal): Promise<Search
     if (e instanceof OffError && e.kind === 'rate') searchLimiter.block(e.retryInMs);
     throw e;
   }
+}
+
+const details = new Map<string, Promise<MappedProduct>>();
+
+/**
+ * Full product values for a search result (search hits only carry approximate values).
+ * Cached for the session; a failed request is forgotten so it can be retried.
+ */
+export function resolveProduct(code: string, signal?: AbortSignal): Promise<MappedProduct> {
+  let p = details.get(code);
+  if (!p) {
+    p = fetchProduct(code, signal);
+    details.set(code, p);
+    p.catch(() => details.delete(code));
+  }
+  return p;
+}
+
+/** Fetches the exact values of the first results in the background, two at a time. */
+export async function prefetchDetails(codes: string[], onResolved: (m: MappedProduct) => void, signal?: AbortSignal) {
+  const queue = [...codes];
+  const worker = async () => {
+    while (queue.length && !signal?.aborted) {
+      const code = queue.shift()!;
+      try {
+        onResolved(await resolveProduct(code));
+      } catch {
+        /* shown on tap if it fails again */
+      }
+    }
+  };
+  await Promise.all([worker(), worker()]);
 }
 
 /** Human message for an error, in French. */
@@ -60,6 +94,8 @@ export function offErrorMessage(e: unknown): string {
     case 'notfound':
       return 'Produit introuvable.';
     default:
-      return 'Connexion impossible à Open Food Facts.';
+      return typeof navigator !== 'undefined' && navigator.onLine === false
+        ? 'Hors ligne. Tes aliments enregistrés restent disponibles.'
+        : 'Open Food Facts ne répond pas pour le moment. Réessaie dans un instant, ou crée l’aliment toi-même.';
   }
 }

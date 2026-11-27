@@ -5,7 +5,7 @@ import type { Food, Portion } from '../../lib/db/schema';
 import { fmtDec, fmtInt, parseDecimal, toInputString } from '../../lib/format';
 import { recipePer100, scaleNutrients, totalOf } from '../../lib/nutrition/food';
 import { OffError } from '../../lib/off/api';
-import { normalizeQuery, offErrorMessage, searchOff } from '../../lib/off/search';
+import { normalizeQuery, offErrorMessage, resolveProduct, searchOff } from '../../lib/off/search';
 import { Field } from '../../ui/controls';
 import { Icon } from '../../ui/Icon';
 import { SkeletonRows } from '../../ui/Progress';
@@ -284,6 +284,21 @@ function IngredientPicker({
     items: [],
   });
   const [chosen, setChosen] = useState<Food | null>(null);
+  const [resolving, setResolving] = useState<string | null>(null);
+  const [pickError, setPickError] = useState<string | null>(null);
+
+  const choose = (f: Food) => {
+    setPickError(null);
+    if (!f.stub || !f.code) return setChosen(f);
+    setResolving(f.id);
+    resolveProduct(f.code)
+      .then(({ food, missing }) => {
+        if (missing.length) setPickError(`Valeurs incomplètes pour « ${food.name} » : crée cet aliment à la main.`);
+        else setChosen(food);
+      })
+      .catch((e: unknown) => setPickError(offErrorMessage(e)))
+      .finally(() => setResolving(null));
+  };
   const searchId = useId();
   const q = normalizeQuery(query);
 
@@ -325,13 +340,19 @@ function IngredientPicker({
 
   const row = (f: Food) => (
     <li key={f.id}>
-      <button type="button" class="row" onClick={() => setChosen(f)}>
+      <button type="button" class="row" onClick={() => choose(f)} aria-busy={resolving === f.id}>
         <Thumb url={f.imageUrl} />
         <span class="row__main">
           <span class="row__title">{f.name}</span>
           <span class="row__sub">
             {f.brand ? `${f.brand} · ` : ''}
-            {fmtInt(f.per100.kcal)} kcal / 100 g
+            {resolving === f.id
+              ? 'Chargement des valeurs…'
+              : f.stub
+                ? f.per100.kcal > 0
+                  ? `≈ ${fmtInt(f.per100.kcal)} kcal / 100 g`
+                  : 'Valeurs au toucher'
+                : `${fmtInt(f.per100.kcal)} kcal / 100 g`}
           </span>
         </span>
       </button>
@@ -358,6 +379,11 @@ function IngredientPicker({
               autoComplete="off"
             />
           </div>
+          {pickError && (
+            <p class="notice notice--error" role="alert">
+              <span>{pickError}</span>
+            </p>
+          )}
           {local.length > 0 && (
             <section class="group" aria-label="Mes aliments">
               <h3 class="group-title">{q ? 'Mes aliments' : 'Récents'}</h3>

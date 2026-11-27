@@ -142,31 +142,97 @@ export async function fetchProduct(code: string, signal?: AbortSignal): Promise<
 }
 
 export const SEARCH_PAGE_SIZE = 20;
+/** Open Food Facts search service (the legacy cgi/search.pl is closed to anonymous apps). */
+export const SEARCH_BASE = 'https://search.openfoodfacts.org';
+const SEARCH_FIELDS = 'code,product_name,product_name_fr,brands,image_front_small_url,serving_quantity,nutriscore_data';
 
+/**
+ * Products with complete nutrition facts, most scanned first: well-known products with
+ * reliable values come up before half-filled entries. Query syntax characters are neutralised.
+ */
 export function searchUrl(q: string): string {
+  const terms = q.replace(/[+\-!(){}[\]^"~*?:\\/&|<>=]/g, ' ').replace(/\s+/g, ' ').trim();
   const params = new URLSearchParams({
-    search_terms: q,
-    search_simple: '1',
-    action: 'process',
-    json: '1',
-    lc: 'fr',
+    q: `${terms} AND states:"en:nutrition-facts-completed"`,
+    langs: 'fr,en',
+    sort_by: '-unique_scans_n',
     page_size: String(SEARCH_PAGE_SIZE),
-    fields: FIELDS,
+    fields: SEARCH_FIELDS,
   });
-  return `${OFF_BASE}/cgi/search.pl?${params}`;
+  return `${SEARCH_BASE}/search?${params}`;
+}
+
+export interface SearchHit {
+  code?: string;
+  product_name?: string | string[];
+  product_name_fr?: string | string[];
+  brands?: string | string[];
+  image_front_small_url?: string;
+  serving_quantity?: number | string;
+  nutriscore_data?: {
+    components?: {
+      negative?: { id?: string; value?: number; unit?: string }[];
+      positive?: { id?: string; value?: number; unit?: string }[];
+    };
+  };
+}
+
+const firstText = (v: string | string[] | undefined) => (Array.isArray(v) ? v[0] : v)?.trim() || '';
+
+/**
+ * Maps a search hit to a provisional food. Calories, protein, sugars, fibre and salt
+ * come from the Nutri-Score data when present; carbs and fat need the full product.
+ */
+export function mapHit(h: SearchHit, now = Date.now()): Food | null {
+  const code = h.code?.trim();
+  const name = firstText(h.product_name_fr) || firstText(h.product_name);
+  if (!code || !name) return null;
+  const comps = [...(h.nutriscore_data?.components?.negative ?? []), ...(h.nutriscore_data?.components?.positive ?? [])];
+  const get = (id: string) => {
+    const c = comps.find((x) => x.id === id);
+    return c && typeof c.value === 'number' && Number.isFinite(c.value) && c.value >= 0 ? c : undefined;
+  };
+  const energy = get('energy');
+  const kcal = energy ? (energy.unit === 'kcal' ? energy.value! : energy.value! / 4.184) : 0;
+  const per100: Nutrients = { kcal: round(kcal, 0), protein: round(get('proteins')?.value ?? 0), carbs: 0, fat: 0 };
+  const sugars = get('sugars')?.value;
+  const fiber = get('fiber')?.value;
+  const salt = get('salt')?.value;
+  if (sugars != null) per100.sugars = round(sugars);
+  if (fiber != null) per100.fiber = round(fiber);
+  if (salt != null) per100.salt = round(salt, 2);
+  const brand = firstText(h.brands)
+    .split(',')[0]!
+    .replace(/^[a-z]{2}:/, '')
+    .trim();
+  const food: Food = {
+    id: `off:${code}`,
+    source: 'off',
+    code,
+    name,
+    brand: brand || undefined,
+    per100,
+    stub: true,
+    createdAt: now,
+    updatedAt: now,
+  };
+  const serving = num(h.serving_quantity);
+  if (serving && serving > 0 && serving < 2000) food.servingGrams = round(serving, 0);
+  if (h.image_front_small_url?.startsWith('https://')) food.imageUrl = h.image_front_small_url;
+  return food;
 }
 
 export async function searchProducts(q: string, signal?: AbortSignal): Promise<Food[]> {
-  const { body } = await getJson(searchUrl(q), signal);
-  const products = (body as { products?: OffProduct[] } | null)?.products ?? [];
+  const { status, body } = await getJson(searchUrl(q), signal);
+  if (status >= 400) throw new OffError('server');
+  const hits = (body as { hits?: SearchHit[] } | null)?.hits ?? [];
   const out: Food[] = [];
   const seen = new Set<string>();
-  for (const p of products) {
-    const m = mapProduct(p);
-    // Results without calories or a name are noise in a calorie tracker.
-    if (!m || m.missing.includes('kcal') || m.food.name === 'Produit sans nom' || seen.has(m.food.id)) continue;
-    seen.add(m.food.id);
-    out.push(m.food);
+  for (const h of hits) {
+    const f = mapHit(h);
+    if (!f || seen.has(f.id)) continue;
+    seen.add(f.id);
+    out.push(f);
   }
   return out;
 }

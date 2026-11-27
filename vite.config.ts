@@ -55,6 +55,16 @@ export default defineConfig({
             },
           },
           {
+            urlPattern: /^https:\/\/search\.openfoodfacts\.org\/search/,
+            handler: 'NetworkFirst',
+            options: {
+              cacheName: 'off-search-v2',
+              networkTimeoutSeconds: 8,
+              expiration: { maxEntries: 150, maxAgeSeconds: 60 * 60 * 24 * 7 },
+              cacheableResponse: { statuses: [200] },
+            },
+          },
+          {
             urlPattern: /^https:\/\/world\.openfoodfacts\.org\/cgi\/search\.pl/,
             handler: 'NetworkFirst',
             options: {

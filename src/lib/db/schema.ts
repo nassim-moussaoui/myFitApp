@@ -61,6 +61,11 @@ export interface Food {
   useCount?: number;
   /** Present when this custom food is a home recipe. */
   recipe?: Recipe;
+  /**
+   * Search result whose values are approximate (calories from the Nutri-Score data):
+   * the full product must be fetched before logging it. Never stored.
+   */
+  stub?: boolean;
   createdAt: number;
   updatedAt: number;
 }

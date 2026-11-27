@@ -8,8 +8,8 @@ import type { Food, SavedMeal } from '../../lib/db/schema';
 import type { ISODate } from '../../lib/date';
 import { fmtDec } from '../../lib/format';
 import { MEALS, mealLabel, type MealId } from '../../lib/nutrition/types';
-import { OffError, fetchProduct, type CoreNutrient } from '../../lib/off/api';
-import { normalizeQuery, offErrorMessage, searchOff } from '../../lib/off/search';
+import { OffError, type CoreNutrient } from '../../lib/off/api';
+import { normalizeQuery, offErrorMessage, prefetchDetails, resolveProduct, searchOff } from '../../lib/off/search';
 import { Segmented } from '../../ui/controls';
 import { Icon } from '../../ui/Icon';
 import { SkeletonRows } from '../../ui/Progress';
@@ -81,12 +81,14 @@ export default function AddFood({ meal: initialMeal, date, onClose }: { meal: Me
   useEffect(() => {
     // Warm up the connection to Open Food Facts while the user types.
     if (!document.querySelector('link[data-off]')) {
-      const l = document.createElement('link');
-      l.rel = 'preconnect';
-      l.href = 'https://world.openfoodfacts.org';
-      l.crossOrigin = 'anonymous';
-      l.dataset.off = '';
-      document.head.append(l);
+      for (const href of ['https://search.openfoodfacts.org', 'https://world.openfoodfacts.org']) {
+        const l = document.createElement('link');
+        l.rel = 'preconnect';
+        l.href = href;
+        l.crossOrigin = 'anonymous';
+        l.dataset.off = '';
+        document.head.append(l);
+      }
     }
     void allFoods()
       .catch(() => [] as Food[])
@@ -108,7 +110,22 @@ export default function AddFood({ meal: initialMeal, date, onClose }: { meal: Me
       setRemote({ status: 'loading' });
       searchOff(q, ctrl.signal)
         .then((r) => {
-          if (!ctrl.signal.aborted) setRemote({ status: 'done', items: r.items });
+          if (ctrl.signal.aborted) return;
+          setRemote({ status: 'done', items: r.items });
+          // Search hits carry approximate values: fetch the exact ones for the first results.
+          const codes = r.items.filter((f) => f.stub && f.code).slice(0, 6).map((f) => f.code!);
+          void prefetchDetails(
+            codes,
+            (m) => {
+              if (ctrl.signal.aborted || m.missing.length) return;
+              setRemote((prev) =>
+                prev.status === 'done'
+                  ? { ...prev, items: prev.items.map((it) => (it.id === m.food.id ? m.food : it)) }
+                  : prev,
+              );
+            },
+            ctrl.signal,
+          );
         })
         .catch((e: unknown) => {
           if (ctrl.signal.aborted || (e instanceof OffError && e.kind === 'aborted')) return;
@@ -168,6 +185,11 @@ export default function AddFood({ meal: initialMeal, date, onClose }: { meal: Me
     });
 
   const open = (f: Food) => {
+    if (f.stub && f.code) {
+      // Approximate search result: load the exact values first.
+      void handleCode(f.code);
+      return;
+    }
     const known = all.find((x) => x.id === f.id);
     if (!known) {
       // Remember every product looked at, so it works offline later.
@@ -201,7 +223,7 @@ export default function AddFood({ meal: initialMeal, date, onClose }: { meal: Me
       return;
     }
     try {
-      const { food, missing } = await fetchProduct(code, ctrl.signal);
+      const { food, missing } = await resolveProduct(code);
       if (ctrl.signal.aborted) return;
       setLookup(null);
       if (missing.length) {
@@ -224,7 +246,24 @@ export default function AddFood({ meal: initialMeal, date, onClose }: { meal: Me
   const showSearch = q.length >= 1;
   const remoteItems = remote.status === 'done' ? remote.items.filter((r) => !local.some((l) => l.id === r.id)) : [];
 
-  const quick = (x: Food) => log(x, defaultGrams(x), meal);
+  const incomplete = (food: Food, missing: CoreNutrient[]) =>
+    setEditor({
+      initial: { ...food, source: 'off', id: undefined },
+      missing,
+      note: 'Fiche incomplète sur Open Food Facts. Complète les valeurs manquantes : l’aliment sera enregistré chez toi.',
+      thenAdd: true,
+    });
+  const quick = (x: Food) => {
+    if (!x.stub || !x.code) return log(x, defaultGrams(x), meal);
+    resolveProduct(x.code)
+      .then(({ food, missing }) => {
+        if (missing.length) return incomplete(food, missing);
+        saveFood(food);
+        upsertLocal(food);
+        log(food, defaultGrams(food), meal);
+      })
+      .catch((e: unknown) => showToast(offErrorMessage(e)));
+  };
   const foodList = (items: Food[], cv = true) => (
     <ul class={`card card--flush list ${cv ? 'list--cv' : ''}`}>
       {items.map((f) => (

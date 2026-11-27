@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { addDays, ageOn, diffDays, isValidISODate, relativeDayLabel, toISODate } from './date';
 import { fmtInt, fmtSigned, parseDecimal, toInputString } from './format';
-import { isValidBarcode, mapProduct } from './off/api';
+import { isValidBarcode, mapHit, mapProduct, searchUrl } from './off/api';
 import { RateLimiter } from './off/rateLimit';
 import { normalizeQuery } from './off/search';
 
@@ -112,4 +112,50 @@ describe('RateLimiter', () => {
 
 it('normalizes queries', () => {
   expect(normalizeQuery('  Skyr   NATURE ')).toBe('skyr nature');
+});
+
+describe('search service results', () => {
+  it('maps a hit to an approximate food', () => {
+    const f = mapHit({
+      code: '3329770077003',
+      product_name: 'Skyr nature 0%',
+      product_name_fr: ['Skyr nature'],
+      brands: ['xx:Yoplait'],
+      serving_quantity: 100,
+      image_front_small_url: 'https://images.openfoodfacts.org/x.jpg',
+      nutriscore_data: {
+        components: {
+          negative: [
+            { id: 'energy', value: 241, unit: 'kJ' },
+            { id: 'sugars', value: 3.6, unit: 'g' },
+            { id: 'salt', value: 0.14, unit: 'g' },
+          ],
+          positive: [
+            { id: 'proteins', value: 9.5, unit: 'g' },
+            { id: 'fiber', value: 0, unit: 'g' },
+          ],
+        },
+      },
+    });
+    expect(f).toMatchObject({
+      id: 'off:3329770077003',
+      name: 'Skyr nature',
+      brand: 'Yoplait',
+      stub: true,
+      servingGrams: 100,
+      per100: { kcal: 58, protein: 9.5, sugars: 3.6, fiber: 0, salt: 0.14 },
+    });
+  });
+  it('skips hits without code or name, tolerates missing nutrition', () => {
+    expect(mapHit({ product_name: 'x' })).toBeNull();
+    expect(mapHit({ code: '1' })).toBeNull();
+    expect(mapHit({ code: '1', product_name: 'Pain' })?.per100.kcal).toBe(0);
+  });
+  it('queries the search service', () => {
+    const u = new URL(searchUrl('skyr (nature): 0%'));
+    expect(u.host).toBe('search.openfoodfacts.org');
+    expect(u.searchParams.get('q')).toBe('skyr nature 0% AND states:"en:nutrition-facts-completed"');
+    expect(u.searchParams.get('sort_by')).toBe('-unique_scans_n');
+    expect(u.searchParams.get('fields')).toContain('nutriscore_data');
+  });
 });
