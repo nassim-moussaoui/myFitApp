@@ -54,7 +54,10 @@ export function JournalScreen({ profile }: { profile: Profile }) {
               aria-label="Choisir une date"
               onChange={(e) => {
                 const v = e.currentTarget.value;
-                if (v) setDate(v);
+                if (v) {
+                  setAnim('');
+                  setDate(v);
+                }
               }}
             />
           </div>
@@ -63,7 +66,14 @@ export function JournalScreen({ profile }: { profile: Profile }) {
           </button>
         </div>
         {date !== today && (
-          <button type="button" class="chip chip--today" onClick={() => setDate(today)}>
+          <button
+            type="button"
+            class="chip chip--today"
+            onClick={() => {
+              setAnim(today > date ? 'left' : 'right');
+              setDate(today);
+            }}
+          >
             Revenir à aujourd'hui
           </button>
         )}
