@@ -10,6 +10,13 @@ import type { Profile } from '../../lib/nutrition/types';
 import { Segmented } from '../../ui/controls';
 import { Icon } from '../../ui/Icon';
 import { Macros } from '../../ui/Progress';
+import { MICRO_REF, microTotals, type Micro } from '../../lib/nutrition/food';
+import { lazy } from '../../app/lazy';
+import { weekStart } from '../../lib/nutrition/weekly';
+import { fmtDec } from '../../lib/format';
+import { AdaptiveCard } from './AdaptiveCard';
+
+const WeeklyReview = lazy(() => import('./WeeklyReview'));
 
 export default function StatsScreen({ profile }: { profile: Profile }) {
   const today = useStore((s) => s.today);
@@ -28,12 +35,21 @@ export default function StatsScreen({ profile }: { profile: Profile }) {
   }, [today]);
 
   const targets = effectiveTargets(profile, today);
-  const stats = useMemo(() => {
-    if (!stored) return null;
+  const merged = useMemo(
     // Days loaded in memory are the source of truth (writes to IndexedDB are asynchronous).
-    const merged = stored.filter((e) => !days[e.date]).concat(...Object.values(days));
-    return periodStats(dailyTotals(merged), today, period, targets.kcal, today);
-  }, [stored, days, today, period, targets.kcal]);
+    () => (stored ? stored.filter((e) => !days[e.date]).concat(...Object.values(days)) : null),
+    [stored, days],
+  );
+  const stats = useMemo(
+    () => (merged ? periodStats(dailyTotals(merged), today, period, targets.kcal, today) : null),
+    [merged, today, period, targets.kcal],
+  );
+  const micros = useMemo(() => {
+    if (!merged || !stats?.daysLogged) return null;
+    const from = addDays(today, -(period - 1));
+    const t = microTotals(merged.filter((e) => e.date >= from && e.date <= today));
+    return { t, n: stats.daysLogged };
+  }, [merged, stats, today, period]);
 
   const pct = stats && targets.kcal > 0 ? Math.round((stats.avg.kcal / targets.kcal) * 100) : 0;
 
@@ -78,6 +94,34 @@ export default function StatsScreen({ profile }: { profile: Profile }) {
               </p>
               <hr class="divider" />
               <Macros value={stats.avg} target={targets} />
+              {micros && (
+                <>
+                  <hr class="divider" />
+                  <div class="micros">
+                    {(['fiber', 'sugars', 'salt'] as Micro[]).map((k) => {
+                      const v = micros.t[k].value / micros.n;
+                      const ref = MICRO_REF[k];
+                      const over = ref.kind === 'max' && v > ref.ref;
+                      return (
+                        <div class="micro" key={k}>
+                          <span class="micro__label">
+                            {ref.label}
+                            {!micros.t[k].complete && <span aria-hidden="true">*</span>}
+                          </span>
+                          <span class={`micro__val ${over ? 'warn-text' : ''}`}>
+                            {fmtDec(v)} <span>/ {ref.ref} g</span>
+                          </span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                  <p class="footnote">
+                    Repères par jour : fibres 30 g minimum, sucres 50 g et sel 5 g maximum.
+                    {(['fiber', 'sugars', 'salt'] as Micro[]).some((k) => !micros.t[k].complete) &&
+                      ' * Données partielles : certains aliments ne les indiquent pas.'}
+                  </p>
+                </>
+              )}
             </section>
 
             <section class="card" aria-labelledby="s-reg">
@@ -123,6 +167,8 @@ export default function StatsScreen({ profile }: { profile: Profile }) {
             </section>
           </>
         )}
+        <AdaptiveCard profile={profile} />
+        <WeeklyReview profile={profile} weekStart={addDays(weekStart(today), -7)} />
       </main>
     </>
   );

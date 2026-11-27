@@ -3,6 +3,7 @@ import { removeEntry, saveFood, updateEntry } from '../../app/actions';
 import { getFood } from '../../lib/db';
 import type { Entry, Food } from '../../lib/db/schema';
 import { QuantitySheet } from './QuantitySheet';
+import { QuickAddSheet } from './QuickAdd';
 
 /** Edit or delete a journal entry. */
 export default function EntrySheet({ entry, onClose }: { entry: Entry; onClose: () => void }) {
@@ -18,6 +19,29 @@ export default function EntrySheet({ entry, onClose }: { entry: Entry; onClose: 
       alive = false;
     };
   }, [entry.foodId]);
+
+  if (entry.kind === 'quick') {
+    return (
+      <QuickAddSheet
+        initial={{ name: entry.name, ...entry.per100 }}
+        meal={entry.meal}
+        mode="edit"
+        onClose={onClose}
+        onConfirm={(v, meal) => {
+          updateEntry(entry, {
+            meal,
+            name: v.name.trim() || 'Ajout rapide',
+            per100: { kcal: v.kcal, protein: v.protein, carbs: v.carbs, fat: v.fat },
+          });
+          onClose();
+        }}
+        onDelete={() => {
+          removeEntry(entry);
+          onClose();
+        }}
+      />
+    );
+  }
 
   // The entry keeps its own snapshot of values; the stored food only adds favourite and portion.
   const view: Food = {

@@ -1,5 +1,7 @@
-import { useRef, useState } from 'preact/hooks';
+import { useEffect, useRef, useState } from 'preact/hooks';
 import { resetLoadedState, saveProfile } from '../../app/actions';
+import { refreshAdaptive, setAdaptive } from '../../app/adaptive';
+import { savePrefs } from '../../app/water';
 import { showToast, useStore } from '../../app/store';
 import { getTheme, setTheme, type Theme } from '../../app/theme';
 import { clearAll, dumpAll, replaceAll } from '../../lib/db';
@@ -159,6 +161,8 @@ export default function SettingsScreen({ profile }: { profile: Profile }) {
           </div>
         </section>
 
+        <WaterGroup />
+
         <section class="group" aria-labelledby="set-data">
           <h2 class="group-title" id="set-data">
             Données
@@ -178,7 +182,8 @@ export default function SettingsScreen({ profile }: { profile: Profile }) {
             onChange={(e) => void onFile(e.currentTarget.files?.[0])}
           />
           <p class="footnote" style={{ padding: '0 0.25rem' }}>
-            Tout est stocké sur ce téléphone.{' '}
+            Tout est stocké sur ce téléphone. L'export contient le journal, les pesées, les mesures et tes aliments ;
+            les photos restent sur l'appareil.{' '}
             {persisted === true
               ? 'Stockage persistant activé : le système ne l’effacera pas pour libérer de la place.'
               : persisted === false
@@ -306,6 +311,10 @@ export default function SettingsScreen({ profile }: { profile: Profile }) {
 
 function GoalsGroup({ profile }: { profile: Profile }) {
   const today = useStore((s) => s.today);
+  const adaptive = useStore((s) => s.adaptive);
+  useEffect(() => {
+    void refreshAdaptive();
+  }, []);
   const auto = computeTargets(profile, today);
   const [pText, setPText] = useState(toInputString(profile.proteinPerKg, 2));
   const [fText, setFText] = useState(toInputString(profile.fatPerKg, 2));
@@ -332,7 +341,7 @@ function GoalsGroup({ profile }: { profile: Profile }) {
             <dd>{fmtInt(auto.bmr)} kcal</dd>
           </div>
           <div>
-            <dt>Dépense estimée</dt>
+            <dt>Dépense {auto.adaptive ? 'réelle' : 'estimée'}</dt>
             <dd>{fmtInt(auto.tdee)} kcal</dd>
           </div>
           {auto.adjustment !== 0 && (
@@ -348,6 +357,17 @@ function GoalsGroup({ profile }: { profile: Profile }) {
             </dd>
           </div>
         </dl>
+        <hr class="divider" />
+        <Switch
+          label="Dépense réelle"
+          hint={
+            adaptive?.ok
+              ? `Mesurée sur tes données : ${fmtInt(adaptive.estimate.tdee)} kcal (formule ${fmtInt(auto.formulaTdee)})`
+              : 'Calculée depuis tes repas et pesées, ajustée chaque semaine'
+          }
+          checked={!!profile.adaptive}
+          onChange={setAdaptive}
+        />
         <hr class="divider" />
         <Switch
           label="Objectifs manuels"
@@ -462,5 +482,30 @@ function OverrideEditor({ profile, override }: { profile: Profile; override: Mac
         Revenir au calcul auto
       </button>
     </>
+  );
+}
+
+function WaterGroup() {
+  const prefs = useStore((s) => s.prefs);
+  return (
+    <section class="group" aria-labelledby="set-water">
+      <h2 class="group-title" id="set-water">
+        Eau
+      </h2>
+      <div class="card">
+        <Segmented
+          legend="Objectif quotidien"
+          value={prefs.waterGoalMl}
+          onChange={(v) => savePrefs({ waterGoalMl: v })}
+          options={[1500, 2000, 2500, 3000].map((v) => ({ value: v, label: `${fmtDec(v / 1000)} L` }))}
+        />
+        <Segmented
+          legend="Taille d'un verre"
+          value={prefs.glassMl}
+          onChange={(v) => savePrefs({ glassMl: v })}
+          options={[150, 200, 250, 330, 500].map((v) => ({ value: v, label: `${v} ml` }))}
+        />
+      </div>
+    </section>
   );
 }

@@ -61,7 +61,7 @@ test.describe('parcours principal', () => {
 
     // Create a custom food from the add screen, then log it in 2 taps from the recents.
     await page.getByRole('button', { name: 'Ajouter un aliment', exact: true }).click();
-    await add.getByRole('button', { name: 'Créer un aliment' }).click();
+    await add.getByRole('button', { name: 'Aliment', exact: true }).click();
     const editor = page.locator('dialog.sheet').filter({ hasText: 'Nouvel aliment' });
     await editor.getByLabel('Nom').fill('Riz basmati cuit');
     await editor.getByLabel('Protéines').fill('3,5');
@@ -125,6 +125,68 @@ test.describe('parcours principal', () => {
     await expect(page.getByRole('region', { name: 'Dîner', exact: true })).toContainText('Riz basmati cuit');
     await page.getByRole('link', { name: 'Réglages' }).click();
     await expect(page.locator('.kv').first()).toContainText('78,4 kg');
+  });
+
+  test('eau, ajout rapide, repas type, recette, mesures, dépense réelle', async ({ page }) => {
+    await mockOff(page);
+    await onboard(page);
+
+    // Water: two glasses.
+    const water = page.getByRole('region', { name: 'Eau' });
+    await page.getByRole('button', { name: 'Ajouter un verre de 250 ml' }).click();
+    await page.getByRole('button', { name: 'Ajouter un verre de 250 ml' }).click();
+    await expect(water).toContainText('0,5 L sur 2 L');
+
+    // Quick add on lunch.
+    await page.getByRole('button', { name: 'Ajouter un aliment : Déjeuner' }).click();
+    await page.getByRole('button', { name: 'Ajout rapide' }).click();
+    const quick = page.locator('dialog.sheet').filter({ hasText: "sans créer d'aliment" });
+    await quick.getByLabel('Nom (facultatif)').fill('Resto');
+    await quick.getByLabel('Calories').fill('850');
+    await quick.getByRole('button', { name: 'Ajouter', exact: true }).click();
+    const lunch = page.getByRole('region', { name: 'Déjeuner', exact: true });
+    await expect(lunch).toContainText('Resto');
+    await expect(lunch).toContainText('Ajout rapide');
+    await expect(page.locator('.summary')).toContainText('850 kcal');
+
+    // Save lunch as a template, then add it to yesterday's dinner in one tap.
+    await page.getByRole('button', { name: 'Enregistrer comme repas type : Déjeuner' }).click();
+    await page.locator('dialog.sheet').getByRole('button', { name: 'Enregistrer', exact: true }).click();
+    await page.getByRole('button', { name: 'Jour précédent' }).click();
+    await page.getByRole('button', { name: 'Ajouter un aliment : Dîner' }).click();
+    await page.getByRole('button', { name: 'Ajouter le repas Mon déjeuner' }).click();
+    await page.locator('dialog.addfood').getByRole('button', { name: 'Fermer' }).click();
+    await expect(page.getByRole('region', { name: 'Dîner', exact: true })).toContainText('Resto');
+
+    // Recipe: one ingredient from Open Food Facts, cooked weight, then log a portion.
+    await page.getByRole('button', { name: 'Ajouter un aliment', exact: true }).click();
+    await page.getByRole('button', { name: 'Recette' }).click();
+    await page.getByLabel('Nom de la recette').fill('Bol skyr');
+    await page.getByRole('button', { name: 'Ajouter un ingrédient' }).click();
+    await page.getByLabel('Rechercher un ingrédient').fill('skyr');
+    await page.locator('dialog').last().locator('.row').filter({ hasText: 'Skyr nature' }).first().click();
+    await page.getByLabel('Quantité (crue)').fill('400');
+    await page.getByRole('button', { name: 'Ajouter à la recette' }).click();
+    await page.getByLabel('Nombre de parts').fill('2');
+    await expect(page.locator('dialog.recipe')).toContainText('Une part (200 g)');
+    await page.getByRole('button', { name: 'Enregistrer la recette' }).click();
+    const qty = page.locator('dialog.sheet').filter({ hasText: 'Pour 100 g' });
+    await expect(qty).toContainText('Bol skyr');
+    await qty.getByRole('button', { name: '1 portion · 200 g' }).click();
+    await qty.getByRole('button', { name: 'Ajouter', exact: true }).click();
+
+    // Body measurements.
+    await page.getByRole('link', { name: 'Poids' }).click();
+    await page.locator('.segmented__opt').filter({ hasText: 'Mesures' }).click();
+    await page.getByLabel('Tour de taille').fill('85');
+    await page.getByRole('button', { name: 'Enregistrer', exact: true }).click();
+    await expect(page.getByRole('heading', { name: 'Évolution' })).toBeVisible();
+    await expect(page.locator('.list').first()).toContainText('85,0 cm');
+
+    // Real expenditure needs more data: the card explains what is missing.
+    await page.getByRole('link', { name: 'Stats' }).click();
+    await expect(page.getByRole('heading', { name: 'Dépense réelle' })).toBeVisible();
+    await expect(page.locator('section').filter({ hasText: 'Dépense réelle' }).last()).toContainText('Note tes repas');
   });
 
   test('produit introuvable au scan manuel puis création', async ({ page }) => {

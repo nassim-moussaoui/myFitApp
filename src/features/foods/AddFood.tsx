@@ -1,9 +1,10 @@
 import { useEffect, useId, useMemo, useRef, useState } from 'preact/hooks';
 import { addEntry, removeEntry, saveFood } from '../../app/actions';
 import { lazy } from '../../app/lazy';
-import { showToast } from '../../app/store';
+import { addQuickEntry, addSavedMeal, ensureMeals } from '../../app/extras';
+import { showToast, useStore } from '../../app/store';
 import { allFoods, foodByCode } from '../../lib/db';
-import type { Food } from '../../lib/db/schema';
+import type { Food, SavedMeal } from '../../lib/db/schema';
 import type { ISODate } from '../../lib/date';
 import { fmtDec } from '../../lib/format';
 import { MEALS, mealLabel, type MealId } from '../../lib/nutrition/types';
@@ -16,7 +17,10 @@ import { Sheet } from '../../ui/Sheet';
 import { ToastHost } from '../../ui/Toast';
 import { FoodEditor } from './FoodEditor';
 import { FoodRow, defaultGrams } from './FoodRow';
+import { MealTemplateSheet, SavedMealRow } from './MealSheets';
 import { QuantitySheet } from './QuantitySheet';
+import { QuickAddSheet } from './QuickAdd';
+import { RecipeEditor } from './RecipeEditor';
 
 const Scanner = lazy(() => import('./Scanner'));
 
@@ -65,6 +69,10 @@ export default function AddFood({ meal: initialMeal, date, onClose }: { meal: Me
   const [editor, setEditor] = useState<EditorState | null>(null);
   const [scanning, setScanning] = useState(false);
   const [lookup, setLookup] = useState<Lookup | null>(null);
+  const [quickOpen, setQuickOpen] = useState(false);
+  const [recipe, setRecipe] = useState<{ initial?: Food } | null>(null);
+  const [template, setTemplate] = useState<SavedMeal | null>(null);
+  const savedMeals = useStore((s) => s.meals);
   const lookupCtrl = useRef<AbortController | null>(null);
   const online = useOnline();
   const searchId = useId();
@@ -84,6 +92,7 @@ export default function AddFood({ meal: initialMeal, date, onClose }: { meal: Me
       .catch(() => [] as Food[])
       .then(setFoods);
     void Scanner.preload();
+    void ensureMeals();
     return () => lookupCtrl.current?.abort();
   }, []);
 
@@ -117,6 +126,16 @@ export default function AddFood({ meal: initialMeal, date, onClose }: { meal: Me
   }, [q, retry]);
 
   const all = foods ?? [];
+  const meals = useMemo(() => {
+    const list = [...(savedMeals ?? [])].sort((a, b) => (b.lastUsedAt ?? b.createdAt) - (a.lastUsedAt ?? a.createdAt));
+    if (!q) return list;
+    const words = q.split(' ');
+    return list.filter((m) => words.every((w) => normalizeQuery(m.name).includes(w)));
+  }, [savedMeals, q]);
+  const addMeal = (m: SavedMeal) => {
+    void addSavedMeal(m, meal, date);
+  };
+
   const local = useMemo(() => {
     if (q.length < 1) return [];
     const words = q.split(' ');
@@ -129,10 +148,14 @@ export default function AddFood({ meal: initialMeal, date, onClose }: { meal: Me
     () => all.filter((f) => f.favorite).sort((a, b) => a.name.localeCompare(b.name, 'fr')),
     [all],
   );
+  const recipes = useMemo(
+    () => all.filter((f) => f.recipe).sort((a, b) => (b.lastUsedAt ?? b.createdAt) - (a.lastUsedAt ?? a.createdAt)),
+    [all],
+  );
   const recents = useMemo(
     () =>
       all
-        .filter((f) => f.lastUsedAt && !f.favorite)
+        .filter((f) => f.lastUsedAt && !f.favorite && !f.recipe)
         .sort((a, b) => (b.lastUsedAt ?? 0) - (a.lastUsedAt ?? 0))
         .slice(0, 15),
     [all],
@@ -245,6 +268,24 @@ export default function AddFood({ meal: initialMeal, date, onClose }: { meal: Me
                 <Icon name="barcode" size={24} />
               </button>
             </form>
+            <div class="action-tiles">
+              <button type="button" class="action-tile" onClick={() => setQuickOpen(true)}>
+                <Icon name="flash" size={20} />
+                Ajout rapide
+              </button>
+              <button type="button" class="action-tile" onClick={() => setRecipe({})}>
+                <Icon name="pot" size={20} />
+                Recette
+              </button>
+              <button
+                type="button"
+                class="action-tile"
+                onClick={() => setEditor({ initial: { name: query.trim() }, thenAdd: true })}
+              >
+                <Icon name="plus" size={20} stroke={2.4} />
+                Aliment
+              </button>
+            </div>
           </div>
 
           {!online && (
@@ -255,6 +296,26 @@ export default function AddFood({ meal: initialMeal, date, onClose }: { meal: Me
 
           {!showSearch && foods && (
             <>
+              {meals.length > 0 && (
+                <section class="group" aria-labelledby="meals-h">
+                  <h3 class="group-title" id="meals-h">
+                    Repas types
+                  </h3>
+                  <ul class="card card--flush list">
+                    {meals.map((m) => (
+                      <SavedMealRow key={m.id} meal={m} onOpen={setTemplate} onQuickAdd={addMeal} />
+                    ))}
+                  </ul>
+                </section>
+              )}
+              {recipes.length > 0 && (
+                <section class="group" aria-labelledby="rcp-h">
+                  <h3 class="group-title" id="rcp-h">
+                    Mes recettes
+                  </h3>
+                  {foodList(recipes)}
+                </section>
+              )}
               {favorites.length > 0 && (
                 <section class="group" aria-labelledby="fav-h">
                   <h3 class="group-title" id="fav-h">
@@ -271,7 +332,7 @@ export default function AddFood({ meal: initialMeal, date, onClose }: { meal: Me
                   {foodList(recents)}
                 </section>
               )}
-              {favorites.length === 0 && recents.length === 0 && (
+              {favorites.length === 0 && recents.length === 0 && meals.length === 0 && recipes.length === 0 && (
                 <div class="card empty">
                   <span class="empty__icon" aria-hidden="true">
                     <Icon name="search" size={22} />
@@ -288,6 +349,19 @@ export default function AddFood({ meal: initialMeal, date, onClose }: { meal: Me
 
           {showSearch && (
             <>
+              {meals.length > 0 && (
+                <section class="group" aria-labelledby="meals-h">
+                  <h3 class="group-title" id="meals-h">
+                    Repas types
+                  </h3>
+                  <ul class="card card--flush list">
+                    {meals.map((m) => (
+                      <SavedMealRow key={m.id} meal={m} onOpen={setTemplate} onQuickAdd={addMeal} />
+                    ))}
+                  </ul>
+                </section>
+              )}
+
               {local.length > 0 && (
                 <section class="group" aria-labelledby="mine-h">
                   <h3 class="group-title" id="mine-h">
@@ -324,14 +398,16 @@ export default function AddFood({ meal: initialMeal, date, onClose }: { meal: Me
             </>
           )}
 
-          <button
-            type="button"
-            class="btn btn--secondary btn--block"
-            onClick={() => setEditor({ initial: { name: query.trim() }, thenAdd: true })}
-          >
-            <Icon name="plus" size={20} stroke={2.4} />
-            {query.trim() ? `Créer « ${query.trim()} »` : 'Créer un aliment'}
-          </button>
+          {showSearch && (
+            <button
+              type="button"
+              class="btn btn--secondary btn--block"
+              onClick={() => setEditor({ initial: { name: query.trim() }, thenAdd: true })}
+            >
+              <Icon name="plus" size={20} stroke={2.4} />
+              Créer « {query.trim()} »
+            </button>
+          )}
 
           <p class="attribution">
             Données produits :{' '}
@@ -364,7 +440,8 @@ export default function AddFood({ meal: initialMeal, date, onClose }: { meal: Me
           onEditFood={
             selected.source === 'custom'
               ? () => {
-                  setEditor({ initial: selected, thenAdd: true });
+                  if (selected.recipe) setRecipe({ initial: selected });
+                  else setEditor({ initial: selected, thenAdd: true });
                   setSelected(null);
                 }
               : undefined
@@ -383,6 +460,46 @@ export default function AddFood({ meal: initialMeal, date, onClose }: { meal: Me
             upsertLocal(food);
             setEditor(null);
             if (editor.thenAdd) setSelected(food);
+          }}
+        />
+      )}
+
+      {quickOpen && (
+        <QuickAddSheet
+          meal={meal}
+          mode="add"
+          onClose={() => setQuickOpen(false)}
+          onConfirm={(v, m) => {
+            const entry = addQuickEntry(v, m, date);
+            showToast(`Ajouté : ${entry.name}, ${v.kcal} kcal`, { label: 'Annuler', run: () => removeEntry(entry, true) });
+            setQuickOpen(false);
+            onClose();
+          }}
+        />
+      )}
+
+      {recipe && (
+        <RecipeEditor
+          initial={recipe.initial}
+          onClose={() => setRecipe(null)}
+          onSave={(food) => {
+            saveFood(food);
+            upsertLocal(food);
+            setRecipe(null);
+            setSelected(food);
+          }}
+        />
+      )}
+
+      {template && (
+        <MealTemplateSheet
+          meal={template}
+          target={meal}
+          date={date}
+          onClose={() => setTemplate(null)}
+          onAdded={() => {
+            setTemplate(null);
+            onClose();
           }}
         />
       )}
