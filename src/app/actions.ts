@@ -1,6 +1,15 @@
 import * as db from '../lib/db';
 import type { Entry, Food, WeightEntry } from '../lib/db/schema';
 import { addDays, todayISO, type ISODate } from '../lib/date';
+import { fmtKg } from '../lib/format';
+import {
+  DEFAULT_GOALS,
+  advanceGoals,
+  isGoals,
+  plannedWeeklyRate,
+  type AdvanceResult,
+  type WeightGoals,
+} from '../lib/nutrition/goals';
 import type { MealId, Profile } from '../lib/nutrition/types';
 import { showToast, store } from './store';
 
@@ -167,6 +176,8 @@ export function saveProfile(profile: Profile): void {
   const p = { ...profile, updatedAt: Date.now() };
   store.set({ profile: p });
   persist(db.setMeta('profile', p));
+  // A new goal or rate may change the direction of the current milestone.
+  syncGoals();
 }
 
 // Weight ----------------------------------------------------------------------
@@ -174,17 +185,54 @@ export function saveProfile(profile: Profile): void {
 export async function ensureWeights(): Promise<WeightEntry[]> {
   const cached = store.get().weights;
   if (cached) return cached;
-  const list = await db.allWeights().catch(() => [] as WeightEntry[]);
-  store.set({ weights: list });
+  const [list, goals] = await Promise.all([
+    db.allWeights().catch(() => [] as WeightEntry[]),
+    db.getMeta('goals').catch(() => undefined),
+  ]);
+  store.set({ weights: list, goals: isGoals(goals) ? { ...DEFAULT_GOALS, ...goals } : DEFAULT_GOALS });
+  syncGoals();
   return list;
+}
+
+// Weight milestones -------------------------------------------------------------
+
+/**
+ * Updates milestones from the latest weigh-in (or the profile weight when there is none):
+ * validates a reached milestone and starts the next one right away.
+ */
+export function syncGoals(): AdvanceResult | null {
+  const s = store.get();
+  if (!s.profile || !s.weights || !s.goals) return null;
+  const last = s.weights[s.weights.length - 1];
+  const latest = last ? { date: last.date, kg: last.kg } : { date: s.today, kg: s.profile.weightKg };
+  const r = advanceGoals(s.goals, latest, plannedWeeklyRate(s.profile, s.today));
+  if (r.goals !== s.goals) saveGoals(r.goals);
+  return r;
+}
+
+export function saveGoals(goals: WeightGoals): void {
+  store.set({ goals });
+  persist(db.setMeta('goals', goals));
+}
+
+export function milestoneToast(r: AdvanceResult | null): string | null {
+  if (!r) return null;
+  if (r.finalJustReached) return 'Objectif final atteint, bravo !';
+  if (r.reached) {
+    const next = r.goals.current;
+    return next ? `Palier atteint ! Prochain : ${fmtKg(next.targetKg)} kg` : 'Palier atteint, bravo !';
+  }
+  return null;
 }
 
 const byDate = (a: WeightEntry, b: WeightEntry) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0);
 
-export function saveWeight(date: ISODate, kg: number): void {
+/** Saves a weigh-in and returns what happened to the milestones. */
+export function saveWeight(date: ISODate, kg: number): AdvanceResult | null {
   const w: WeightEntry = { date, kg, createdAt: Date.now() };
   store.set((s) => ({ weights: [...(s.weights ?? []).filter((x) => x.date !== date), w].sort(byDate) }));
   persist(db.putWeight(w));
+  return syncGoals();
 }
 
 export function removeWeight(w: WeightEntry): void {
@@ -203,7 +251,7 @@ export function removeWeight(w: WeightEntry): void {
 
 export async function resetLoadedState(): Promise<void> {
   const today = todayISO();
-  store.set({ days: {}, weights: null, today, date: today, overlay: null });
+  store.set({ days: {}, weights: null, goals: null, today, date: today, overlay: null });
   const [profile, entries] = await Promise.all([db.getMeta('profile'), db.entriesForDate(today)]);
   store.set((s) => ({ profile: profile ?? null, days: { ...s.days, [today]: entries } }));
 }

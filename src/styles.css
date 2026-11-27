@@ -2108,6 +2108,240 @@ button.row:active {
   border-top: 2px dashed var(--text-2);
 }
 
+/* ---------------------------------------------------------- Milestones */
+.bg-accent {
+  background: var(--ring);
+}
+.milestone__recent {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  padding: var(--sp-2) var(--sp-3);
+  border-radius: var(--r-sm);
+  background: var(--accent-soft);
+  color: var(--accent-text);
+  font-size: 0.875rem;
+  font-weight: 600;
+}
+.milestone__main {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: var(--sp-3);
+  flex-wrap: wrap;
+}
+.milestone__meta {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: var(--sp-1);
+}
+.milestone__track {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+}
+.milestone__track .bar {
+  height: 0.625rem;
+}
+.milestone__ends {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--sp-3);
+  font-size: 0.8125rem;
+  color: var(--text-2);
+  font-variant-numeric: tabular-nums;
+}
+.milestone__ends strong {
+  color: var(--text);
+}
+.milestone__final {
+  border-top: 1px solid var(--sep);
+  padding-bottom: 0;
+  font-size: 0.9375rem;
+}
+.milestone__win {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+}
+.milestone__badge {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 3rem;
+  height: 3rem;
+  border-radius: 50%;
+  background: var(--accent);
+  color: var(--on-accent);
+}
+.milestone__dot {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 1.75rem;
+  height: 1.75rem;
+  border-radius: 50%;
+  background: var(--accent-soft);
+  color: var(--accent-text);
+}
+
+/* Projection chart */
+.chart__future {
+  fill: var(--fill);
+  opacity: 0.6;
+}
+.chart__today {
+  stroke: var(--text-2);
+  stroke-width: 1;
+  stroke-dasharray: 2 3;
+}
+.chart__ref line {
+  stroke-width: 1.5;
+}
+.chart__ref text {
+  font-size: 11px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+.chart__ref--milestone line {
+  stroke: var(--accent-text);
+  stroke-dasharray: 2 3;
+}
+.chart__ref--milestone text {
+  fill: var(--accent-text);
+}
+.chart__ref--final line {
+  stroke: var(--text-2);
+  stroke-dasharray: 6 4;
+}
+.chart__ref--final text {
+  fill: var(--text-2);
+}
+.chart__proj {
+  fill: none;
+  stroke: var(--ring);
+  stroke-width: 2.5;
+  stroke-dasharray: 6 5;
+  stroke-linecap: round;
+}
+.chart__anchor {
+  fill: var(--ring);
+  stroke: var(--card);
+  stroke-width: 2.5;
+}
+.chart__end {
+  fill: var(--card);
+  stroke: var(--ring);
+  stroke-width: 2.5;
+}
+.legend__proj {
+  width: 1.125rem;
+  border-top: 2.5px dashed var(--ring);
+}
+.legend__milestone {
+  width: 1.125rem;
+  border-top: 2px dotted var(--accent-text);
+}
+.projection__result {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-1);
+  padding: var(--sp-3) var(--sp-4);
+  border-radius: var(--r-md);
+  background: var(--fill);
+}
+.projection__result .hero-num {
+  align-items: center;
+}
+.projection__result .hero-num__value {
+  font-size: 2rem;
+}
+.projection__at {
+  font-size: 0.9375rem;
+}
+
+/* Celebration */
+.celebrate {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--sp-2);
+  padding: var(--sp-4) 0 var(--sp-2);
+  text-align: center;
+}
+.celebrate__badge {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 5rem;
+  height: 5rem;
+  margin-bottom: var(--sp-2);
+  border-radius: 50%;
+  background: var(--accent);
+  color: var(--on-accent);
+  box-shadow: 0 10px 30px color-mix(in srgb, var(--accent) 40%, transparent);
+  animation: badge-pop 0.6s var(--ease) both;
+}
+.celebrate__big {
+  font-size: 1.75rem;
+  font-weight: 800;
+  letter-spacing: -0.03em;
+  font-variant-numeric: tabular-nums;
+}
+.celebrate__burst {
+  position: absolute;
+  top: calc(var(--sp-4) + 2.5rem);
+  left: 50%;
+  width: 0;
+  height: 0;
+}
+.celebrate__burst i {
+  position: absolute;
+  left: -4px;
+  top: -4px;
+  width: 8px;
+  height: 8px;
+  border-radius: 2px;
+  background: var(--ring);
+  opacity: 0;
+  transform: rotate(var(--a)) translateY(0);
+  animation: burst 0.9s var(--ease) 0.15s both;
+}
+.celebrate__burst i:nth-child(3n) {
+  background: var(--carbs);
+}
+.celebrate__burst i:nth-child(3n + 1) {
+  background: var(--protein);
+}
+.celebrate__burst i:nth-child(4n) {
+  background: var(--fat);
+}
+@keyframes badge-pop {
+  0% {
+    transform: scale(0.4);
+    opacity: 0;
+  }
+  60% {
+    transform: scale(1.12);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+@keyframes burst {
+  0% {
+    opacity: 1;
+    transform: rotate(var(--a)) translateY(0) scale(1);
+  }
+  100% {
+    opacity: 0;
+    transform: rotate(var(--a)) translateY(-5.5rem) scale(0.6);
+  }
+}
+
 /* ---------------------------------------------------------- Onboarding */
 .onboarding {
   display: flex;

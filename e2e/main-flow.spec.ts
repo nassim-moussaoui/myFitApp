@@ -101,6 +101,19 @@ test.describe('parcours principal', () => {
     await page.getByRole('button', { name: 'Mettre à jour' }).click();
     await expect(page.locator('.list')).toContainText('78,4 kg');
 
+    // Milestones: 30 days at the planned rate (-0.5 kg/week) from 80 kg -> 77,9 kg.
+    const milestone = page.locator('section.milestone');
+    await expect(milestone).toContainText('77,9');
+    await expect(page.getByRole('heading', { name: 'Projection' })).toBeVisible();
+    await page.getByLabel('Poids en kilos').fill('77,8');
+    await page.locator('form.card').getByRole('button', { name: 'Enregistrer' }).click();
+    const win = page.locator('dialog.celebrate-sheet');
+    await expect(win.getByRole('heading', { name: 'Palier atteint !' })).toBeVisible();
+    await expect(win).toContainText('Prochain palier');
+    await win.getByRole('button', { name: 'Continuer' }).click();
+    await expect(milestone).toContainText('Palier précédent atteint');
+    await expect(page.getByRole('heading', { name: 'Paliers atteints' })).toBeVisible();
+
     // Stats reflect today.
     await page.getByRole('link', { name: 'Stats' }).click();
     await expect(page.getByText('Moyenne par jour suivi')).toBeVisible();

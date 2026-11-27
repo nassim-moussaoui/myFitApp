@@ -1,6 +1,7 @@
 import { useLayoutEffect, useReducer, useRef } from 'preact/hooks';
 import type { Entry, WeightEntry } from '../lib/db/schema';
 import { todayISO, type ISODate } from '../lib/date';
+import type { WeightGoals } from '../lib/nutrition/goals';
 import type { MealId, Profile } from '../lib/nutrition/types';
 
 export interface Toast {
@@ -22,6 +23,8 @@ export interface AppState {
   date: ISODate;
   days: Record<ISODate, Entry[]>;
   weights: WeightEntry[] | null;
+  /** Weight milestones, loaded with the weights. */
+  goals: WeightGoals | null;
   overlay: Overlay;
   toast: Toast | null;
   /** Set when a new service worker is waiting. Calling it activates it and reloads. */
@@ -59,6 +62,7 @@ export const store = createStore<AppState>({
   date: today,
   days: {},
   weights: null,
+  goals: null,
   overlay: null,
   toast: null,
   applyUpdate: null,

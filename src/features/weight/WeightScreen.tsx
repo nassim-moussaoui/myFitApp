@@ -1,16 +1,18 @@
 import { useEffect, useMemo, useState } from 'preact/hooks';
-import { ensureWeights, removeWeight, saveProfile, saveWeight } from '../../app/actions';
+import { ensureWeights, milestoneToast, removeWeight, saveProfile, saveWeight } from '../../app/actions';
 import { lazy } from '../../app/lazy';
 import { showToast, useStore } from '../../app/store';
 import type { WeightEntry } from '../../lib/db/schema';
 import { addDays, isValidISODate, longDayLabel, relativeDayLabel } from '../../lib/date';
 import { fmtInt, fmtKg, fmtSigned, parseDecimal, toInputString } from '../../lib/format';
+import { plannedWeeklyRate, type AdvanceResult } from '../../lib/nutrition/goals';
 import { computeTargets } from '../../lib/nutrition/targets';
 import type { Profile } from '../../lib/nutrition/types';
 import { movingAverage, weeklyTrend } from '../../lib/nutrition/weight';
 import { Field, Segmented } from '../../ui/controls';
 import { Icon } from '../../ui/Icon';
 import { Sheet } from '../../ui/Sheet';
+import { CelebrationSheet, GoalSheet, MilestoneCard, MilestoneHistory, ProjectionCard } from './Goals';
 
 const WeightChart = lazy(
   () => import('./WeightChart'),
@@ -23,7 +25,10 @@ const valid = (kg: number | null): kg is number => kg != null && kg >= 30 && kg 
 
 export default function WeightScreen({ profile }: { profile: Profile }) {
   const weights = useStore((s) => s.weights);
+  const goals = useStore((s) => s.goals);
   const today = useStore((s) => s.today);
+  const [goalSheet, setGoalSheet] = useState(false);
+  const [celebration, setCelebration] = useState<AdvanceResult | null>(null);
   const [kgText, setKgText] = useState<string | null>(null);
   const [date, setDate] = useState(today);
   const [prompt, setPrompt] = useState<number | null>(null);
@@ -41,6 +46,8 @@ export default function WeightScreen({ profile }: { profile: Profile }) {
   const ma = useMemo(() => movingAverage(list), [list]);
   const trend = useMemo(() => weeklyTrend(list), [list]);
   const lastMa = ma[ma.length - 1];
+  const rate = plannedWeeklyRate(profile, today);
+  const latest = last ? { date: last.date, kg: last.kg } : { date: today, kg: profile.weightKg };
 
   const step = (d: number) => {
     const base = valid(kg) ? kg : (last?.kg ?? profile.weightKg);
@@ -57,9 +64,10 @@ export default function WeightScreen({ profile }: { profile: Profile }) {
     e.preventDefault();
     if (!valid(kg) || !isValidISODate(date) || date > today) return;
     const value = Math.round(kg * 10) / 10;
-    saveWeight(date, value);
+    const r = saveWeight(date, value);
     setKgText(null);
-    showToast(`Pesée enregistrée : ${fmtKg(value)} kg`);
+    showToast(milestoneToast(r) ?? `Pesée enregistrée : ${fmtKg(value)} kg`);
+    if (r && (r.reached || r.finalJustReached)) setCelebration(r);
     const isLatest = !last || date >= last.date;
     if (isLatest && Math.abs(value - profile.weightKg) >= 0.1) setPrompt(value);
   };
@@ -74,6 +82,10 @@ export default function WeightScreen({ profile }: { profile: Profile }) {
         <h1 class="page-title">Poids</h1>
       </header>
       <main class="page" id="main">
+        {goals && (
+          <MilestoneCard goals={goals} latest={latest} today={today} rate={rate} onEdit={() => setGoalSheet(true)} />
+        )}
+
         <form class="card" onSubmit={save} aria-labelledby="w-new">
           <h2 class="card__title" id="w-new">
             Nouvelle pesée
@@ -126,6 +138,19 @@ export default function WeightScreen({ profile }: { profile: Profile }) {
         </form>
 
         {prompt != null && <UpdatePrompt profile={profile} kg={prompt} onDone={() => setPrompt(null)} />}
+
+        {goals && weights && (
+          <ProjectionCard
+            profile={profile}
+            goals={goals}
+            latest={latest}
+            history={list}
+            ma={ma}
+            trend={trend}
+            rate={rate}
+            today={today}
+          />
+        )}
 
         {weights && list.length === 0 && (
           <div class="card empty">
@@ -205,6 +230,8 @@ export default function WeightScreen({ profile }: { profile: Profile }) {
               </p>
             </section>
 
+            {goals && <MilestoneHistory goals={goals} />}
+
             <section class="card" aria-labelledby="w-hist" style={{ paddingBottom: '0.25rem', gap: '0.5rem' }}>
               <div class="card__head">
                 <h2 class="card__title" id="w-hist">
@@ -238,6 +265,12 @@ export default function WeightScreen({ profile }: { profile: Profile }) {
         )}
       </main>
       {editing && <EditWeight entry={editing} onClose={() => setEditing(null)} />}
+      {goalSheet && goals && (
+        <GoalSheet goals={goals} latest={latest} rate={rate} onClose={() => setGoalSheet(false)} />
+      )}
+      {celebration && (
+        <CelebrationSheet result={celebration} profile={profile} onClose={() => setCelebration(null)} />
+      )}
     </>
   );
 }

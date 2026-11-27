@@ -1,5 +1,6 @@
 import type { DBSchema } from 'idb';
 import type { ISODate } from '../date';
+import type { WeightGoals } from '../nutrition/goals';
 import type { MealId, Nutrients, Profile } from '../nutrition/types';
 
 /**
@@ -59,6 +60,7 @@ export interface SearchCacheItem {
 export interface MetaMap {
   profile: Profile;
   persisted: boolean;
+  goals: WeightGoals;
 }
 
 export interface MetaRow<K extends keyof MetaMap = keyof MetaMap> {
