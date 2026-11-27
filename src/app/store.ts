@@ -1,5 +1,14 @@
 import { useLayoutEffect, useReducer, useRef } from 'preact/hooks';
-import type { Entry, WeightEntry } from '../lib/db/schema';
+import {
+  DEFAULT_PREFS,
+  type Entry,
+  type Measurement,
+  type Photo,
+  type Prefs,
+  type SavedMeal,
+  type WeightEntry,
+} from '../lib/db/schema';
+import type { AdaptiveResult } from '../lib/nutrition/adaptive';
 import { todayISO, type ISODate } from '../lib/date';
 import type { WeightGoals } from '../lib/nutrition/goals';
 import type { MealId, Profile } from '../lib/nutrition/types';
@@ -13,6 +22,7 @@ export interface Toast {
 export type Overlay =
   | { kind: 'add'; meal: MealId; date: ISODate }
   | { kind: 'entry'; entry: Entry }
+  | { kind: 'save-meal'; meal: MealId; date: ISODate }
   | null;
 
 export interface AppState {
@@ -25,6 +35,16 @@ export interface AppState {
   weights: WeightEntry[] | null;
   /** Weight milestones, loaded with the weights. */
   goals: WeightGoals | null;
+  prefs: Prefs;
+  /** Water in ml per loaded day. */
+  water: Record<ISODate, number>;
+  /** Days with at least one entry (for the streak). */
+  logged: Set<ISODate> | null;
+  meals: SavedMeal[] | null;
+  measurements: Measurement[] | null;
+  photos: Photo[] | null;
+  /** Latest real-expenditure estimate. */
+  adaptive: AdaptiveResult | null;
   overlay: Overlay;
   toast: Toast | null;
   /** Set when a new service worker is waiting. Calling it activates it and reloads. */
@@ -63,6 +83,13 @@ export const store = createStore<AppState>({
   days: {},
   weights: null,
   goals: null,
+  prefs: DEFAULT_PREFS,
+  water: {},
+  logged: null,
+  meals: null,
+  measurements: null,
+  photos: null,
+  adaptive: null,
   overlay: null,
   toast: null,
   applyUpdate: null,

@@ -19,6 +19,7 @@ const StatsScreen = lazy(() => import('../features/stats/StatsScreen'), screenFa
 const SettingsScreen = lazy(() => import('../features/settings/SettingsScreen'), screenFallback);
 const AddFood = lazy(() => import('../features/foods/AddFood'));
 const EntrySheet = lazy(() => import('../features/foods/EntrySheet'));
+const SaveMealSheet = lazy(() => import('../features/foods/MealSheets'));
 
 const TABS: { id: Tab; label: string; icon: IconName }[] = [
   { id: 'journal', label: 'Journal', icon: 'journal' },
@@ -51,6 +52,8 @@ export function App() {
       void WeightScreen.preload();
       void StatsScreen.preload();
       void SettingsScreen.preload();
+      // Weekly adjustment of the targets from real data, when enabled.
+      if (store.get().profile?.adaptive) void import('./adaptive').then((m) => m.refreshAdaptive());
     });
   }, [!!profile]);
 
@@ -91,6 +94,7 @@ export function App() {
 
       {overlay?.kind === 'add' && <AddFood meal={overlay.meal} date={overlay.date} onClose={close} />}
       {overlay?.kind === 'entry' && <EntrySheet entry={overlay.entry} onClose={close} />}
+      {overlay?.kind === 'save-meal' && <SaveMealSheet meal={overlay.meal} date={overlay.date} onClose={close} />}
       <ToastHost />
     </div>
   );

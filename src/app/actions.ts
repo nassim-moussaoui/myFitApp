@@ -1,5 +1,5 @@
 import * as db from '../lib/db';
-import type { Entry, Food, WeightEntry } from '../lib/db/schema';
+import { DEFAULT_PREFS, type Entry, type Food, type WeightEntry } from '../lib/db/schema';
 import { addDays, todayISO, type ISODate } from '../lib/date';
 import { fmtKg } from '../lib/format';
 import {
@@ -16,7 +16,7 @@ import { showToast, store } from './store';
 const SAVE_ERROR = "Impossible d'enregistrer sur l'appareil. Réessaie.";
 
 /** Fire-and-forget persistence: the UI is already updated. */
-function persist(p: Promise<unknown>): void {
+export function persist(p: Promise<unknown>): void {
   p.catch((e) => {
     console.error(e);
     showToast(SAVE_ERROR);
@@ -33,8 +33,20 @@ export const newId = uid;
 export async function initApp(): Promise<void> {
   try {
     const today = store.get().today;
-    const [profile, entries] = await Promise.all([db.getMeta('profile'), db.entriesForDate(today)]);
-    store.set((s) => ({ ready: true, profile: profile ?? null, days: { ...s.days, [today]: entries } }));
+    const [profile, entries, prefs, water] = await Promise.all([
+      db.getMeta('profile'),
+      db.entriesForDate(today),
+      db.getMeta('prefs').catch(() => undefined),
+      db.waterInRange(today, today).catch(() => []),
+    ]);
+    store.set((s) => ({
+      ready: true,
+      profile: profile ?? null,
+      days: { ...s.days, [today]: entries },
+      prefs: { ...DEFAULT_PREFS, ...prefs },
+      water: { ...s.water, [today]: water[0]?.ml ?? 0 },
+    }));
+    void loadLogged();
   } catch (e) {
     console.error(e);
     store.set({ ready: true });
@@ -87,8 +99,29 @@ export function setDate(date: ISODate): void {
   void ensureDay(addDays(date, 1));
 }
 
-function setDay(date: ISODate, update: (list: Entry[]) => Entry[]): void {
-  store.set((s) => ({ days: { ...s.days, [date]: update(s.days[date] ?? []) } }));
+/** Updates a day's entries in memory and keeps the logged-days set (streak) in sync. */
+export function setDay(date: ISODate, update: (list: Entry[]) => Entry[]): void {
+  store.set((s) => {
+    const list = update(s.days[date] ?? []);
+    let logged = s.logged;
+    if (logged && list.length > 0 !== logged.has(date)) {
+      logged = new Set(logged);
+      if (list.length) logged.add(date);
+      else logged.delete(date);
+    }
+    return { days: { ...s.days, [date]: list }, logged };
+  });
+}
+
+/** Logged days over the last 400 days, for the streak. */
+export async function loadLogged(): Promise<void> {
+  const today = store.get().today;
+  const set = await db.loggedDates(addDays(today, -400), today).catch(() => new Set<ISODate>());
+  store.set((s) => {
+    // Merge with anything added in memory meanwhile.
+    for (const [d, l] of Object.entries(s.days)) if (l.length) set.add(d);
+    return { logged: set };
+  });
 }
 
 /** Records that a food was used, for "Récents" and the default quantity. */
@@ -121,7 +154,7 @@ export function addEntry(food: Food, grams: number, meal: MealId, date: ISODate)
   return { entry, food: touchFood(food, grams) };
 }
 
-export function updateEntry(entry: Entry, patch: Partial<Pick<Entry, 'grams' | 'meal'>>): void {
+export function updateEntry(entry: Entry, patch: Partial<Pick<Entry, 'grams' | 'meal' | 'name' | 'per100'>>): void {
   const next: Entry = { ...entry, ...patch, updatedAt: Date.now() };
   setDay(entry.date, (l) => l.map((e) => (e.id === entry.id ? next : e)));
   persist(db.putEntries([next]));
@@ -251,7 +284,29 @@ export function removeWeight(w: WeightEntry): void {
 
 export async function resetLoadedState(): Promise<void> {
   const today = todayISO();
-  store.set({ days: {}, weights: null, goals: null, today, date: today, overlay: null });
-  const [profile, entries] = await Promise.all([db.getMeta('profile'), db.entriesForDate(today)]);
-  store.set((s) => ({ profile: profile ?? null, days: { ...s.days, [today]: entries } }));
+  store.set({
+    days: {},
+    weights: null,
+    goals: null,
+    water: {},
+    logged: null,
+    meals: null,
+    measurements: null,
+    photos: null,
+    adaptive: null,
+    today,
+    date: today,
+    overlay: null,
+  });
+  const [profile, entries, prefs] = await Promise.all([
+    db.getMeta('profile'),
+    db.entriesForDate(today),
+    db.getMeta('prefs').catch(() => undefined),
+  ]);
+  store.set((s) => ({
+    profile: profile ?? null,
+    days: { ...s.days, [today]: entries },
+    prefs: { ...DEFAULT_PREFS, ...prefs },
+  }));
+  void loadLogged();
 }
