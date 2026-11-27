@@ -28,6 +28,10 @@ export interface Profile {
   fatPerKg: number;
   /** Manual targets. null means automatic. */
   override: MacroTargets | null;
+  /** Use the expenditure measured from real data instead of the formula. */
+  adaptive?: boolean;
+  /** Last measured expenditure applied to the targets. */
+  adaptiveTdee?: { kcal: number; on: ISODate } | null;
   updatedAt: number;
 }
 

@@ -1,7 +1,16 @@
 import { isValidISODate } from '../date';
 import type { Nutrients } from '../nutrition/types';
 import type { DumpData } from './index';
-import { DB_VERSION, type Entry, type Food, type WeightEntry } from './schema';
+import {
+  DB_VERSION,
+  MEASURES,
+  type Entry,
+  type Food,
+  type Measurement,
+  type SavedMeal,
+  type WaterLog,
+  type WeightEntry,
+} from './schema';
 
 export const BACKUP_FORMAT = 'myfit-backup';
 
@@ -19,7 +28,10 @@ export class BackupError extends Error {}
  * Data migrations for backups made by older versions.
  * Key v upgrades data from schema v to v + 1. Append only.
  */
-const dataMigrations: Record<number, (d: DumpData) => DumpData> = {};
+const dataMigrations: Record<number, (d: DumpData) => DumpData> = {
+  // 1 -> 2: new stores start empty (already defaulted by the parser).
+  1: (d) => d,
+};
 
 export function buildBackup(data: DumpData, theme?: string, now = new Date()): Backup {
   return { format: BACKUP_FORMAT, schemaVersion: DB_VERSION, exportedAt: now.toISOString(), theme, data };
@@ -45,6 +57,17 @@ const isFood = (v: unknown): v is Food =>
   isObj(v) && typeof v.id === 'string' && typeof v.name === 'string' && isNutrients(v.per100);
 
 const isWeight = (v: unknown): v is WeightEntry => isObj(v) && isValidISODate(v.date) && isNum(v.kg);
+
+const isPortion = (v: unknown) =>
+  isObj(v) && typeof v.name === 'string' && isNum(v.grams) && isNutrients(v.per100);
+
+const isMeal = (v: unknown): v is SavedMeal =>
+  isObj(v) && typeof v.id === 'string' && typeof v.name === 'string' && Array.isArray(v.items) && v.items.every(isPortion);
+
+const isWater = (v: unknown): v is WaterLog => isObj(v) && isValidISODate(v.date) && isNum(v.ml);
+
+const isMeasurement = (v: unknown): v is Measurement =>
+  isObj(v) && isValidISODate(v.date) && MEASURES.every((k) => v[k] == null || isNum(v[k]));
 
 export interface ParsedBackup {
   backup: Backup;
@@ -74,6 +97,9 @@ export function parseBackup(raw: unknown): ParsedBackup {
     entries: keep(arr('entries'), isEntry),
     foods: keep(arr('foods'), isFood),
     weights: keep(arr('weights'), isWeight),
+    meals: keep(arr('meals'), isMeal),
+    water: keep(arr('water'), isWater),
+    measurements: keep(arr('measurements'), isMeasurement),
   };
   for (let v = version; v < DB_VERSION; v++) data = dataMigrations[v]?.(data) ?? data;
   return {

@@ -53,3 +53,49 @@ export function isPlausiblePer100(n: Partial<Nutrients>): n is Nutrients {
   if ((n.kcal ?? 0) > 950) return false;
   return (n.protein ?? 0) + (n.carbs ?? 0) + (n.fat ?? 0) <= 101;
 }
+
+/** Per-100 g values of a home recipe: total of the ingredients spread over the cooked weight. */
+export function recipePer100(ingredients: Iterable<Portion>, cookedGrams: number): Nutrients {
+  const total = totalOf(ingredients);
+  if (cookedGrams <= 0) return { ...ZERO };
+  const f = 100 / cookedGrams;
+  const r = (n: number, d = 1) => Math.round(n * f * 10 ** d) / 10 ** d;
+  const out: Nutrients = { kcal: r(total.kcal, 0), protein: r(total.protein), carbs: r(total.carbs), fat: r(total.fat) };
+  for (const k of OPTIONAL) {
+    const v = total[k];
+    if (v != null) out[k] = r(v, k === 'salt' ? 2 : 1);
+  }
+  return out;
+}
+
+export type Micro = 'fiber' | 'sugars' | 'salt';
+
+export interface MicroTotal {
+  value: number;
+  /** True when every logged food had this value (otherwise the total is a minimum). */
+  complete: boolean;
+}
+
+/** Daily fibre, sugars and salt, flagging totals built from incomplete data. */
+export function microTotals(items: Iterable<Portion>): Record<Micro, MicroTotal> {
+  const out: Record<Micro, MicroTotal> = {
+    fiber: { value: 0, complete: true },
+    sugars: { value: 0, complete: true },
+    salt: { value: 0, complete: true },
+  };
+  for (const i of items) {
+    for (const k of ['fiber', 'sugars', 'salt'] as const) {
+      const v = i.per100[k];
+      if (v == null) out[k].complete = false;
+      else out[k].value += (v * Math.max(0, i.grams)) / 100;
+    }
+  }
+  return out;
+}
+
+/** Reference values: fibre at least 30 g (ANSES), salt at most 5 g and free sugars at most 50 g (WHO). */
+export const MICRO_REF: Record<Micro, { label: string; ref: number; kind: 'min' | 'max' }> = {
+  fiber: { label: 'Fibres', ref: 30, kind: 'min' },
+  sugars: { label: 'Sucres', ref: 50, kind: 'max' },
+  salt: { label: 'Sel', ref: 5, kind: 'max' },
+};

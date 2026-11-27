@@ -110,6 +110,10 @@ export interface ComputedTargets extends MacroTargets {
   age: number;
   bmr: number;
   tdee: number;
+  /** Expenditure from the Mifflin-St Jeor formula, whatever is used. */
+  formulaTdee: number;
+  /** True when `tdee` comes from real data (adaptive mode). */
+  adaptive: boolean;
   adjustment: number;
   clamped: boolean;
   carbsClamped: boolean;
@@ -119,13 +123,17 @@ export interface ComputedTargets extends MacroTargets {
 export function computeTargets(p: Profile, today: ISODate): ComputedTargets {
   const age = profileAge(p, today);
   const b = bmr({ sex: p.sex, weightKg: p.weightKg, heightCm: p.heightCm, age });
-  const t = tdee(b, p.activity);
+  const formula = tdee(b, p.activity);
+  const adaptive = !!(p.adaptive && p.adaptiveTdee);
+  const t = adaptive ? p.adaptiveTdee!.kcal : formula;
   const cal = calorieTarget({ sex: p.sex, bmr: b, tdee: t, goal: p.goal, rateKgPerWeek: p.rateKgPerWeek });
   const m = macroSplit(cal.kcal, p.weightKg, p.proteinPerKg, p.fatPerKg);
   return {
     age,
     bmr: Math.round(b),
     tdee: Math.round(t),
+    formulaTdee: Math.round(formula),
+    adaptive,
     adjustment: Math.round(dailyAdjustment(p.goal, p.rateKgPerWeek)),
     kcal: cal.kcal,
     clamped: cal.clamped,

@@ -17,6 +17,13 @@ import {
   replaceAll,
   setMeta,
   allWeights,
+  allMeals,
+  allMeasurements,
+  loggedDates,
+  putMeal,
+  putMeasurement,
+  putWater,
+  waterInRange,
 } from './index';
 import type { Entry, Food } from './schema';
 
@@ -106,5 +113,51 @@ describe('backup round trip', () => {
     });
     expect(backup.data.entries).toHaveLength(1);
     expect(skipped).toBe(2);
+  });
+});
+
+describe('schema v2', () => {
+  it('upgrades a version 1 database without losing data', async () => {
+    await closeDB();
+    const { openDB, deleteDB } = await import('idb');
+    await deleteDB('myfit');
+    // Build a v1 database exactly as the first release did.
+    const v1 = await openDB('myfit', 1, {
+      upgrade(db) {
+        db.createObjectStore('meta', { keyPath: 'key' });
+        db.createObjectStore('entries', { keyPath: 'id' }).createIndex('by-date', 'date');
+        db.createObjectStore('foods', { keyPath: 'id' }).createIndex('by-code', 'code');
+        db.createObjectStore('weights', { keyPath: 'date' });
+        db.createObjectStore('searchCache', { keyPath: 'q' }).createIndex('by-ts', 'ts');
+      },
+    });
+    await v1.put('weights', { date: '2026-01-01', kg: 81, createdAt: 0 });
+    await v1.put('entries', entry('old', '2026-01-01'));
+    v1.close();
+
+    expect(await allWeights()).toEqual([{ date: '2026-01-01', kg: 81, createdAt: 0 }]);
+    expect(await entriesForDate('2026-01-01')).toHaveLength(1);
+    await putWater({ date: '2026-01-01', ml: 750 });
+    await putMeal({ id: 'm1', name: 'Petit-déj', items: [], createdAt: 0 });
+    await putMeasurement({ date: '2026-01-01', waist: 85, createdAt: 0 });
+    expect(await waterInRange('2026-01-01', '2026-01-31')).toHaveLength(1);
+    expect(await allMeals()).toHaveLength(1);
+    expect(await allMeasurements()).toHaveLength(1);
+  });
+
+  it('lists logged days from the index only', async () => {
+    await putEntries([entry('a', '2026-03-01'), entry('b', '2026-03-01'), entry('c', '2026-03-03')]);
+    expect([...(await loggedDates('2026-03-01', '2026-03-31'))]).toEqual(['2026-03-01', '2026-03-03']);
+  });
+
+  it('imports a version 1 backup', () => {
+    const { backup } = parseBackup({
+      format: 'myfit-backup',
+      schemaVersion: 1,
+      data: { meta: [], entries: [entry('a', '2026-03-01')], foods: [], weights: [] },
+    });
+    expect(backup.schemaVersion).toBe(2);
+    expect(backup.data.meals).toEqual([]);
+    expect(backup.data.water).toEqual([]);
   });
 });
